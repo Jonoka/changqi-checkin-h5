@@ -1,22 +1,160 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { api, post } from './api.js'
+import { createScanner, loadWechatSdk } from './wechat-scan.js'
 
 const activity = ref(null)
 const error = ref('')
+const me = ref(null)
+const identityState = ref('loading')
+const identityMessage = ref('')
+const selectedKey = ref('')
+const scanNotice = ref('')
+const demoResult = ref('')
+const demoBusy = ref(false)
+const scannerState = reactive({ phase: 'idle', message: '' })
+const inWechat = /MicroMessenger/i.test(navigator.userAgent)
+const signatureUrl = window.location.href.split('#')[0]
+const selectedPoint = computed(() => activity.value?.points.find((point) => point.key === selectedKey.value))
+const routeError = ref('')
+let identityBusy = false
+
+function loginFailure(cause) {
+  if (cause.code === 'NEED_LOGIN') {
+    me.value = null
+    identityState.value = 'need-login'
+    identityMessage.value = '身份已失效，请重新进入活动'
+  }
+}
+
+function showScannedPoint(result) {
+  selectedKey.value = result.point.key
+  scanNotice.value = result.alreadyCompleted ? '此地点已有完成记录；本次扫码未改变进度。' : '已识别当前扫码地点；扫码本身不会增加进度。'
+  window.location.hash = `point/${result.point.key}`
+}
+
+const scanner = createScanner({
+  state: scannerState,
+  loadSdk: loadWechatSdk,
+  getConfig: () => api(`/api/wechat/js-config?url=${encodeURIComponent(signatureUrl)}`),
+  submit: (result) => post('/api/scan', { result }),
+  onPoint: showScannedPoint,
+  onFailure: loginFailure
+})
+
+function readRoute() {
+  const match = /^#point\/([A-Za-z0-9_-]{1,32})$/.exec(window.location.hash)
+  const key = match?.[1] || ''
+  if (key !== selectedKey.value) scanNotice.value = ''
+  selectedKey.value = key
+  routeError.value = window.location.hash && !match ? '页面入口无效，请从地点列表重新选择' : ''
+}
+
+function viewPoint(point) {
+  scanNotice.value = ''
+  selectedKey.value = point.key
+  window.location.hash = `point/${point.key}`
+}
+
+function backHome() {
+  selectedKey.value = ''
+  scanNotice.value = ''
+  window.location.hash = ''
+}
+
+function startLogin() {
+  try { sessionStorage.setItem('changqi.oauth-attempt', String(Date.now())) } catch { /* Manual login still works without storage. */ }
+  window.location.assign(`/auth/wechat?returnTo=${encodeURIComponent(`/${window.location.hash}`)}`)
+}
+
+function tryAutomaticLogin() {
+  if (!inWechat || activity.value.developmentDemo || !activity.value.wechatLoginAvailable || new URLSearchParams(window.location.search).has('authError')) return
+  // This is only a redirect-loop guard, never a source of identity or progress.
+  try {
+    const previous = Number(sessionStorage.getItem('changqi.oauth-attempt') || 0)
+    if (Date.now() - previous > 120000) {
+      const attempt = String(Date.now())
+      sessionStorage.setItem('changqi.oauth-attempt', attempt)
+      if (sessionStorage.getItem('changqi.oauth-attempt') === attempt) startLogin()
+    }
+  } catch { /* Use the explicit login button when sessionStorage is unavailable. */ }
+}
+
+async function loadMe(automatic = false) {
+  if (identityBusy || demoBusy.value) return
+  identityBusy = true
+  if (!me.value) identityState.value = 'loading'
+  identityMessage.value = ''
+  try {
+    me.value = await api('/api/me')
+    identityState.value = 'ready'
+    try { sessionStorage.removeItem('changqi.oauth-attempt') } catch { /* No stored identity. */ }
+    if (inWechat && !activity.value.developmentDemo && scannerState.phase === 'idle') await scanner.initialize()
+  } catch (cause) {
+    me.value = null
+    identityState.value = cause.code === 'NEED_LOGIN' ? 'need-login' : 'error'
+    identityMessage.value = cause.message
+    if (automatic && cause.code === 'NEED_LOGIN') tryAutomaticLogin()
+  } finally { identityBusy = false }
+}
 
 async function loadActivity() {
   error.value = ''
   try {
-    const response = await fetch('/api/activity')
-    const payload = await response.json()
-    if (!response.ok || !payload.ok) throw new Error(payload.error?.message || '活动配置读取失败')
-    activity.value = payload.data
-  } catch (cause) {
-    error.value = cause.message
-  }
+    activity.value = await api('/api/activity')
+    demoResult.value ||= `${activity.value.publicOrigin}/q/p01`
+    readRoute()
+    await loadMe(true)
+  } catch (cause) { error.value = cause.message }
 }
 
-onMounted(loadActivity)
+async function demoLogin(identity) {
+  if (demoBusy.value || identityBusy) return
+  demoBusy.value = true
+  me.value = null
+  identityState.value = 'loading'
+  identityMessage.value = ''
+  scanNotice.value = ''
+  try {
+    me.value = await post('/api/dev/login', { identity })
+    identityState.value = 'ready'
+  } catch (cause) {
+    identityState.value = 'error'
+    identityMessage.value = cause.message
+  } finally { demoBusy.value = false }
+}
+
+async function demoScan() {
+  if (demoBusy.value) return
+  demoBusy.value = true
+  scannerState.message = '正在识别开发演示二维码…'
+  try {
+    showScannedPoint(await post('/api/scan', { result: demoResult.value }))
+    scannerState.message = '开发演示地点已识别；没有调用微信摄像头'
+  } catch (cause) {
+    loginFailure(cause)
+    scannerState.message = cause.message
+  } finally { demoBusy.value = false }
+}
+
+function restorePage() {
+  if (document.visibilityState === 'hidden') return
+  scanner.resume()
+  if (activity.value && !demoBusy.value) void loadMe()
+}
+
+onMounted(() => {
+  void loadActivity()
+  window.addEventListener('hashchange', readRoute)
+  window.addEventListener('pageshow', restorePage)
+  document.addEventListener('visibilitychange', restorePage)
+})
+onUnmounted(() => {
+  scanner.dispose()
+  window.removeEventListener('hashchange', readRoute)
+  window.removeEventListener('pageshow', restorePage)
+  document.removeEventListener('visibilitychange', restorePage)
+})
 </script>
 
 <template>
@@ -25,13 +163,60 @@ onMounted(loadActivity)
       <p class="eyebrow">漫游进度</p>
       <h1>{{ activity.activityName }}</h1>
       <p class="intro">上传现场照片，记录你的长岐村漫游。</p>
-      <div class="point-count">{{ activity.points.length }} 个地点</div>
-      <ul class="point-list">
-        <li v-for="point in activity.points" :key="point.key">
-          <span class="point-index">{{ point.displayOrder }}</span>
-          <span>{{ point.name }}</span>
-        </li>
-      </ul>
+      <p v-if="activity.developmentDemo" class="notice demo-label"><strong>开发演示</strong> · 模拟身份与二维码输入，使用真实测试数据库和会话；不是微信真机结果。</p>
+      <p v-else-if="!inWechat" class="notice">请在微信内打开活动。本浏览器可查看地点，但不能使用微信授权和扫一扫。</p>
+      <p v-if="!activity.enabled" class="notice" role="status">活动暂未开放或已结束。已有进度仍可查看。</p>
+
+      <div class="identity-block" aria-live="polite">
+        <p v-if="identityState === 'loading'">正在恢复本人身份…</p>
+        <template v-if="me">
+          <p>{{ me.userLabel }} · 本人漫游进度</p>
+          <div class="point-count">{{ me.completedCount }}/{{ me.totalCount }}</div>
+          <button type="button" class="secondary" @click="loadMe()">刷新本人状态</button>
+        </template>
+        <template v-else>
+          <p>登录后显示本人进度 · 共 {{ activity.points.length }} 个地点</p>
+          <p v-if="identityMessage" role="status">{{ identityMessage }}</p>
+          <button v-if="inWechat && !activity.developmentDemo && activity.wechatLoginAvailable" type="button" @click="startLogin">重新识别微信身份</button>
+          <p v-if="inWechat && !activity.developmentDemo && !activity.wechatLoginAvailable">微信接入尚未配置完成，请稍后从公众号菜单重试。</p>
+          <button type="button" class="secondary" @click="loadMe()">重试读取身份</button>
+        </template>
+      </div>
+
+      <div v-if="activity.developmentDemo" class="demo-controls">
+        <button type="button" :disabled="demoBusy" @click="demoLogin('visitor-a')">演示游客 A</button>
+        <button type="button" :disabled="demoBusy" @click="demoLogin('visitor-b')">演示游客 B</button>
+        <label for="demo-qr">开发演示：输入完整地点二维码 URL</label>
+        <input id="demo-qr" v-model="demoResult" type="text" autocomplete="off" />
+        <button type="button" :disabled="!me || !activity.enabled || demoBusy" @click="demoScan">识别演示地点码</button>
+      </div>
+      <div v-else class="scan-controls">
+        <button type="button" :disabled="!me || !inWechat || !activity.enabled || scannerState.phase !== 'ready'" @click="scanner.scan">扫一扫打卡</button>
+        <button v-if="me && inWechat && ['error', 'idle'].includes(scannerState.phase)" type="button" class="secondary" @click="scanner.initialize">重新准备扫一扫</button>
+      </div>
+      <p v-if="scannerState.message" class="notice" role="status">{{ scannerState.message }}</p>
+
+      <section v-if="selectedPoint" class="point-detail" aria-live="polite">
+        <h2>{{ selectedPoint.name }}</h2>
+        <p>{{ !me ? '登录后查看本人的完成状态' : me.completedKeys.includes(selectedPoint.key) ? '本人已有该地点的完成记录' : '该地点尚未完成' }}</p>
+        <p>{{ scanNotice || '仅查看地点；点击地图或列表不会取得扫码资格。' }}</p>
+        <p class="notice">照片上传将在下一阶段接入</p>
+        <button type="button" class="secondary" @click="backHome">返回地点列表</button>
+      </section>
+      <template v-else>
+        <p v-if="selectedKey || routeError" role="alert">{{ routeError || '地点不存在，请从列表重新选择' }}</p>
+        <h2>长岐漫游地点</h2>
+        <p>点击只查看地点；请使用页面内扫一扫识别现场地点码。</p>
+        <ul class="point-list">
+          <li v-for="point in activity.points" :key="point.key">
+            <button type="button" class="point-button" @click="viewPoint(point)">
+              <span class="point-index">{{ point.displayOrder }}</span>
+              <span>{{ point.name }}</span>
+              <small v-if="me">{{ me.completedKeys.includes(point.key) ? '已完成' : '未完成' }}</small>
+            </button>
+          </li>
+        </ul>
+      </template>
     </section>
     <section v-else-if="error" class="activity-card error-card" role="alert">
       <h1>暂时无法打开活动</h1>

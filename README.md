@@ -6,11 +6,9 @@
 
 仓库：`Jonoka/changqi-checkin-h5`，默认分支 `main`。PRD v1.3 的精简业务范围不变；SPEC、TASKS 及部署说明按本版执行。预算几千元、目标交付窗口 2–3 天，不建设后台、库存、员工账号、多活动或复杂防刷。
 
-## 当前真实状态
+## 状态记录
 
-已入库：产品需求、开发规格、Agent 任务、环境样例和五张视觉参考 PNG。原图在提交 `5e0a67dffd2d1788e4742695435665c2639a2510` 中已补入，本次不重绘、不覆盖。
-
-**A0 已完成最小可运行工程，A6.1 已完成构建准备并实际运行过 Actions 测试。** run `35587927134` 的检查、前端构建、Docker 镜像构建和元数据导出通过，但因仓库 artifact 存储配额已满而未上传产物；尚未部署服务器或接入微信。本轮已用独立临时 MySQL 8.4.9 实际执行建表并验证 Node 连接。
+任务进度、验收结果、历史 Actions 运行和外部缺项只维护在 [docs/TASKS.md](docs/TASKS.md)。本文件说明实际运行方式，不单独维护另一份任务状态。五张既有视觉原图见 [assets/reference/README.md](assets/reference/README.md)。
 
 ## 本地运行
 
@@ -18,13 +16,45 @@
 npm ci
 npm run check
 npm run build
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# 首次启动前在本地填写必要配置；已有 .env 不覆盖。
 npm start
 ```
 
 开发页面可单独运行 `npm run dev`，默认访问 `http://localhost:5173`；后端默认监听 `http://localhost:3000`。没有填写数据库凭据时，开发环境仍可打开公开活动页；填写 `DB_*` 后启动会实际执行 `SELECT 1`。生产环境会拒绝缺少必需密钥或开启 `DEV_MOCK_ENABLED` 的配置。
 
 配置校验由 `npm run check` 执行，当前地点数量从 `config/activity.json` 动态读取。建表前准备好目标数据库后运行 `npm run db:schema`；脚本只创建 `users` 和 `checkins` 两张业务表。
+
+### 身份、会话与开发入口
+
+身份功能需要真实 MySQL 连接和安全随机生成、不少于 32 字符的 `SESSION_SECRET`；密钥仅保存在本地 `.env`。`express-session` 与 `express-mysql-session` 在应用启动时建立必要的 `sessions` 技术表；账号需有建表权限。会话 Cookie 为 HttpOnly、SameSite=Lax，有效期 7 天；HTTPS 使用 Secure。生产遵守 DEPLOY 的回环应用端口及可信反向代理约定，不将应用端口直接暴露到公网。
+
+使用 Vite 时，在 `.env` 设置 `PUBLIC_ORIGIN=http://localhost:5173`、`PORT=3000`；两个终端分别运行 `npm start` 与 `npm run dev`。`/api`、`/auth`、`/q`、`/health` 均由 Vite 代理到后端。只运行构建后的服务时，`PUBLIC_ORIGIN` 改为该服务实际入口（本地通常是 `http://localhost:3000`）。二维码域名、页面签名及回调都使用同一个 `PUBLIC_ORIGIN`，不能混用 localhost、127.0.0.1 或不同端口。
+
+没有微信联调条件时，可在本地显式设置 `NODE_ENV=development` 与 `DEV_MOCK_ENABLED=true`，同时配置独立开发数据库和 `SESSION_SECRET`。页面会显示“开发演示”，提供固定游客 A/B 和完整地点码 URL 输入；它们复用真实用户表、MySQL 会话与 `/api/scan`，不是另一套假进度数据。生产拒绝模拟开关，未配置微信不会自动退回模拟身份。模拟身份会话在关闭模拟后也不能当成正式身份使用。
+
+真实微信使用本地填写的 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`，先确认授权域名、JS 接口安全域名、接口权限及服务端网络条件；不改变公众号菜单、消息服务或第三方托管配置。OAuth 错误页提供手动重试，接口未登录返回 JSON 401。直接打开 `/q/p01` 始终是公众号入口引导；页内扫码识别地点但不增加进度。地点查看使用 hash 路由，不授予扫码资格；照片上传接口和领取写入尚未接入。
+
+### 轻量验证
+
+`npm run check` 保留配置/HTTP 冒烟并运行 Node 内置测试；其中微信网络与 SDK 回调为明确模拟。`npm run build` 只构建前端，不请求 Actions 镜像打包。
+
+数据库检查必须显式选择独立、回环监听的 MySQL 8 测试实例；不使用应用的 `DB_*` 作为默认测试目标。下面是变量占位，不是可直接连接生产的凭据：
+
+```powershell
+$env:TEST_DB_HOST = '127.0.0.1'
+$env:TEST_DB_PORT = '3311' # 填独立测试实例的实际端口
+$env:TEST_DB_USER = 'test_user'
+$env:TEST_DB_PASSWORD = '<仅在本地填写>'
+# 可选：使用已有 Chrome/Edge 做实际页面检查，不安装第二套测试平台。
+$env:TEST_BROWSER_EXECUTABLE = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+npm run test:a1:mysql
+```
+
+测试会创建随机 `changqi_a1_test_*` 库，执行 dotenv-only `npm run db:schema`、真实会话/接口、真实 Node 子进程重启和 Vite 代理检查，只删除本次成功创建的测试库与临时凭据文件。测试账号需可创建/删除该测试库；Vite 检查需要本地 3000、5173 端口空闲。浏览器检查只使用新建的临时 profile；未提供浏览器路径时会明确打印 SKIP。微信网络与摄像头回调均为模拟，不计作 iOS/Android 真机验收。请勿开启会输出连接或会话内容的依赖调试日志。
+
+会话适配器的 MySQL 驱动通过 npm `overrides` 复用根 `mysql2`，避免夹带旧驱动；正常安装并维护同一个 `package-lock.json`，不要移除该约束或使用 `npm audit fix --force`。
+
 
 ## 当前工程结构
 

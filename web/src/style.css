@@ -36,3 +36,22 @@ h1 { margin: 0; font-size: clamp(2rem, 8vw, 3.2rem); line-height: 1.12; }
 .point-index { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #2d6a4f; color: #fff; font-size: 0.82rem; }
 .loading { color: #5e6f5e; }
 .error-card button { margin-top: 20px; padding: 10px 16px; border: 0; border-radius: 6px; background: #2d6a4f; color: white; cursor: pointer; }
+
+button { padding: 10px 14px; border: 1px solid #2d6a4f; border-radius: 6px; background: #2d6a4f; color: white; cursor: pointer; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, input:focus-visible { outline: 3px solid #b7791f; outline-offset: 3px; }
+button.secondary { color: #245e43; background: transparent; margin-top: 10px; }
+.notice { padding: 12px; background: #f6ebc8; border-radius: 6px; line-height: 1.7; overflow-wrap: anywhere; }
+.demo-label { border: 1px dashed #b7791f; }
+.identity-block { margin: 24px 0; }
+.identity-block .point-count { margin-top: 0; font-size: 2rem; }
+.demo-controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.demo-controls label { width: 100%; margin-top: 10px; }
+.demo-controls input { width: 100%; min-width: 0; padding: 12px; font: inherit; border: 1px solid #90a88b; border-radius: 6px; }
+.scan-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+.point-detail { margin-top: 24px; padding-top: 12px; border-top: 1px solid #d5dfc9; }
+.point-list li { padding: 0; }
+.point-button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; color: inherit; border: 0; background: transparent; }
+.point-button small { margin-left: auto; white-space: nowrap; }
+h2 { font-size: 1.3rem; margin-top: 28px; }
+@media (max-width: 420px) { .page-shell { padding: 12px; } .activity-card { padding: 22px; } }

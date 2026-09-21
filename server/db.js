@@ -15,12 +15,20 @@ export function hasDatabaseSettings(settings) {
 }
 
 export function createDatabasePool(settings) {
-  return mysql.createPool({
+  const pool = mysql.createPool({
     ...settings,
     waitForConnections: true,
     connectionLimit: 5,
-    charset: 'utf8mb4'
+    charset: 'utf8mb4',
+    timezone: '+08:00',
+    dateStrings: true,
+    supportBigNumbers: true,
+    bigNumberStrings: true
   })
+  pool.on('connection', (connection) => {
+    connection.query("SET time_zone = '+08:00'")
+  })
+  return pool
 }
 
 export async function checkDatabaseConnection(pool) {
