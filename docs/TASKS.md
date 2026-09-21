@@ -136,7 +136,7 @@
 
 ```text
 实际日期：2026-09-21
-仓库 / 分支 / HEAD：`Jonoka/changqi-checkin-h5` / `main`；起点 `578db40eda607e9dccc49923338071f46ae71b67`，本轮提交 `ca5f5b7f08bcaf1133bc162a05a60307747ec379`
+仓库 / 分支 / HEAD：`Jonoka/changqi-checkin-h5` / `main`；起点 `578db40eda607e9dccc49923338071f46ae71b67`，最终值以本地与远端 `git rev-parse HEAD` 实际读取为准
 执行入口：本地 Agent；未连接生产服务器、GitHub Actions 和微信真机
 构建交接（有构建才填）：源码 `ca5f5b7f08bcaf1133bc162a05a60307747ec379`；run `35587927134` / attempt `1`；artifact 未生成（仓库 Actions artifact 存储配额已满）；镜像标签 `changqi-checkin-h5:ca5f5b7f08bc-35587927134-1`；`linux/amd64` 测试平台，`platformVerified=false`
 服务器版本（有部署才填）：本次与上一版镜像；不得把构建版本当服务器版本
