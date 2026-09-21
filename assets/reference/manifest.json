@@ -1,7 +1,7 @@
 {
   "sourcePackage": "长岐村漫游打卡_仓库初始化材料_v1.3.zip",
   "repository": "Jonoka/changqi-checkin-h5",
-  "status": "Original PNG files pending upload; documentation only initialized.",
+  "status": "Original PNG files present in repository; blob SHAs and byte sizes matched against remote tree.",
   "files": [
     {
       "path": "assets/reference/checkin.png",
@@ -10,7 +10,7 @@
       "height": 1672,
       "sha256": "60ebb1b73288cd044fc4c8958b63d87909280828f2dde5ca3180502a1e045e63",
       "gitBlobSha": "5eed5f7befd69535ab1ab46705fb6a9982d76c36",
-      "repositoryStatus": "pending-upload"
+      "repositoryStatus": "present"
     },
     {
       "path": "assets/reference/claim.png",
@@ -19,7 +19,7 @@
       "height": 1672,
       "sha256": "47f8afb2ac10fd8749f1422b0ead442c162f9eed2fe483df9d1819a17e4815c3",
       "gitBlobSha": "322cf8b03b792e931c2b59ceb2ab0e1a55ae843b",
-      "repositoryStatus": "pending-upload"
+      "repositoryStatus": "present"
     },
     {
       "path": "assets/reference/home.png",
@@ -28,7 +28,7 @@
       "height": 1672,
       "sha256": "60bdd398e9547071278774a5b2c5fe77cccea92c7a65ed3dcf160fa136763713",
       "gitBlobSha": "04d9edf4d28673edb386d6fa5665a8b6da10cb65",
-      "repositoryStatus": "pending-upload"
+      "repositoryStatus": "present"
     },
     {
       "path": "assets/reference/map.png",
@@ -37,7 +37,7 @@
       "height": 1672,
       "sha256": "e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078",
       "gitBlobSha": "dff6bd769398e6a728b5306772e231f613dabe60",
-      "repositoryStatus": "pending-upload"
+      "repositoryStatus": "present"
     },
     {
       "path": "assets/reference/success.png",
@@ -46,7 +46,8 @@
       "height": 1672,
       "sha256": "91e954ea64c16020ab67ddb5a8eef48cc395ee7563ae49349ef9b439bc2c09d0",
       "gitBlobSha": "74d38b2cfe45e83bc74fdef343721c56617bdc6c",
-      "repositoryStatus": "pending-upload"
+      "repositoryStatus": "present"
     }
-  ]
+  ],
+  "verifiedAtCommit": "5e0a67dffd2d1788e4742695435665c2639a2510"
 }
