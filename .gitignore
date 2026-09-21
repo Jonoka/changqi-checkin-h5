@@ -1,0 +1,29 @@
+# Secrets and environment
+.env
+.env.*
+!.env.example
+.htpasswd
+*.pem
+*.key
+/secrets/
+
+# Dependencies and outputs
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Runtime data: never commit visitor photos or database backups
+/var/
+/uploads/
+/backups/
+/artifacts/
+/tmp/
+*.sql.gz
+*.log
+
+# Local files
+.DS_Store
+Thumbs.db
+.idea/
