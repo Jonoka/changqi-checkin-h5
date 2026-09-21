@@ -2,20 +2,6 @@ name: Build application image
 
 on:
   workflow_dispatch:
-    inputs:
-      platform:
-        description: Target single-platform image (verify with server uname -m before production use)
-        required: true
-        type: choice
-        options:
-          - linux/amd64
-          - linux/arm64
-        default: linux/amd64
-      server_arch_verified:
-        description: Mark true only after the target server architecture was measured
-        required: true
-        type: boolean
-        default: false
   push:
     branches: [main]
     paths:
@@ -28,8 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      IMAGE_PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
-      PLATFORM_VERIFIED: ${{ inputs.server_arch_verified || false }}
+      # Test-only default until the target server's uname -m is measured.
+      IMAGE_PLATFORM: linux/amd64
+      PLATFORM_VERIFIED: false
     steps:
       - name: Check out the requested commit
         uses: actions/checkout@v4

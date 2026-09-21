@@ -30,7 +30,7 @@
 
 ## 3. 一个工作流，两个按需触发入口
 
-A6.1 已实现 `.github/workflows/build-image.yml`，名称为 `Build application image`，只有一套检查和镜像导出步骤。触发约定如下；本轮未创建请求文件或实际运行 workflow：[G1][G2]
+A6.1 已实现 `.github/workflows/build-image.yml`，名称为 `Build application image`，只有一套检查和镜像导出步骤。触发约定如下；既有 `workflow_dispatch` run 已验证构建步骤，本轮未创建请求文件或重复运行 workflow：[G1][G2]
 
 ```yaml
 on:
@@ -114,7 +114,7 @@ docker compose --env-file .env.runtime -f compose.yaml logs --tail=100 app
 
 用户准备给本地 Agent 服务器连接权限；连接可用性以实际 SSH 配置和成功读取为准。明确发布任务与目标后，在该授权范围内连续完成下载、上传、加载、更新和检查，不逐条重复请求确认。单纯开发/改文档/请求构建不视为允许修改生产；公众号菜单、其他消息服务、删除数据另行确认。
 
-2026-09-21 本轮已提交 A6.1 工作流、Dockerfile、Compose 与忽略规则，并用 `workflow_dispatch` 实际运行一次。run `35587927134` / attempt `1` 的检查、镜像构建和元数据导出成功，但 artifact 上传因仓库存储配额已满失败；没有连接服务器。服务器架构与生产条件仍未实测。后续事实都记在 TASKS，不在本文件累积重复运行日志。
+2026-09-21 既有 run `35587927134` / attempt `1` 的检查、镜像构建和元数据导出成功，但 artifact 上传因仓库存储配额已满失败。本轮未删除其他项目产物、调整付费设置或重复触发构建；没有连接服务器。服务器架构与生产条件仍未实测。后续事实都记在 TASKS，不在本文件累积重复运行日志。
 
 ## 资料入口
 

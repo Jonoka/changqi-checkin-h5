@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite --config web/vite.config.js",
     "start": "node server/index.js",
-    "check": "node scripts/check-config.mjs",
+    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs",
     "db:schema": "node scripts/apply-schema.mjs",
     "build": "vite build --config web/vite.config.js"
   },
