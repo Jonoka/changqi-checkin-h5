@@ -9,7 +9,7 @@
 - 仓库：`Jonoka/changqi-checkin-h5`；本轮实际读取的 `main` 与远端均为 `578db40eda607e9dccc49923338071f46ae71b67`，工作区无既有修改或未跟踪文件。该 SHA 是本轮起点，不是后续开发固定起点。
 - 初始化历史：`c5bd5888d993984e8d7cfcbd42e5c92416070d6f` 建立仓库；文档基线随后提交；`5e0a67d` 已补入五张视觉原图。当前 HEAD 以工具或 Git 实际读取为准，不写自引用 SHA。
 - 视觉原图：五张 PNG 已在远端；Git blob SHA 与清单匹配。本轮不修改图片，入库不代表 A4 网页实现或验收通过。
-- 本轮已完成 A0 最小工程，并实现 A6.1 的 Dockerfile、生产 Compose 与 Actions 工作流；未创建构建请求文件，未触发 Actions，未部署服务器。
+- 本轮已完成 A0 最小工程，并实现 A6.1 的 Dockerfile、生产 Compose 与 Actions 工作流；已用 `workflow_dispatch` 实际运行一次，未创建构建请求文件，未部署服务器。
 - A0 实际已验证：依赖安装、配置校验、前端构建、应用启动、`GET /api/activity`、独立临时 MySQL 8.4.9 建表及 Node 连接。
 - 执行入口：ChatGPT 网页端或电脑本地 Agent 开发均可；Actions 统一构建，有 SSH 权限的本地 Agent 默认负责下载、上传和部署。
 - 服务器条件（用户提供，未登录核验）：1 核 1GB、可扩容，Alibaba Cloud Linux 3.2104 LTS 64 位，宝塔已有 MySQL。架构、版本、剩余资源与端口尚待核对。
@@ -27,7 +27,7 @@
 | A3 | 两种领取与人数 | A2 | 未开始 |
 | A4 | 已认可视觉与真实页面状态 | A2、A3 | 未开始 |
 | A5 | 必要回归、问题修复 | A1–A4 | 未开始 |
-| A6 | 双入口构建、本地中转、授权部署与二维码 | A6.1 可在 A0 后准备；上线依赖 A5 和服务器授权 | 进行中（A6.1 已实现，Actions 未运行） |
+| A6 | 双入口构建、本地中转、授权部署与二维码 | A6.1 可在 A0 后准备；上线依赖 A5 和服务器授权 | 进行中（A6.1 已运行，artifact 上传失败） |
 
 状态使用“未开始 / 进行中 / 本地通过待真机 / 阻塞 / 完成”。按实际依赖顺序继续，不每个小步骤都要求批准；外部条件缺失只阻塞对应检查，本地可实现部分继续。开发环境模拟与微信真机结果严格分开。
 
@@ -125,7 +125,7 @@
 | AC-10 | 未验证 | 尚未实现 |
 | AC-11 | 未验证 | 尚未实现 |
 | AC-12 | 未验证 | 参考图不是实际网页 |
-| AC-13 | 未验证 | Dockerfile、单 `app` Compose 与双入口工作流已实现；Actions、镜像产物、服务器架构/更新与持久化尚未实际验证 |
+| AC-13 | 未验证 | run `35587927134` 的依赖、检查、Docker Buildx 构建和元数据导出成功；artifact 因仓库存储配额满未上传，服务器架构/更新与持久化未验证 |
 | AC-14 | 未验证 | 正式域名及印刷样张未就绪 |
 
 可分开写“Actions API 检查已通过；宝塔数据库/微信真机未验证”。本地命令、Actions 日志、服务器结果与真机用户反馈标明来源，不将它们混为一个“全绿”。
@@ -136,18 +136,18 @@
 
 ```text
 实际日期：2026-09-21
-仓库 / 分支 / HEAD：`Jonoka/changqi-checkin-h5` / `main`；起点 `578db40eda607e9dccc49923338071f46ae71b67`，本轮提交 `dcac1f4`（推送后以远端实际值复核）
+仓库 / 分支 / HEAD：`Jonoka/changqi-checkin-h5` / `main`；起点 `578db40eda607e9dccc49923338071f46ae71b67`，本轮提交 `ca5f5b7f08bcaf1133bc162a05a60307747ec379`
 执行入口：本地 Agent；未连接生产服务器、GitHub Actions 和微信真机
-构建交接（有构建才填）：源码 SHA / run ID 与 attempt / artifact / 镜像标签 / 平台
+构建交接（有构建才填）：源码 `ca5f5b7f08bcaf1133bc162a05a60307747ec379`；run `35587927134` / attempt `1`；artifact 未生成（仓库 Actions artifact 存储配额已满）；镜像标签 `changqi-checkin-h5:ca5f5b7f08bc-35587927134-1`；`linux/amd64` 测试平台，`platformVerified=false`
 服务器版本（有部署才填）：本次与上一版镜像；不得把构建版本当服务器版本
 本轮完成：A0；A6.1 文件实现（Dockerfile、`.dockerignore`、`compose.yaml`、`.github/workflows/build-image.yml`）
-实际检查：Windows 本地 Node.js 24.12.0、MySQL 8.4.9；`npm ci`、`npm run check`、`npm run build`、`npm start`、`GET /api/activity`、`npm run db:schema`、`GET /health` 均成功。`npm audit` 为 0 vulnerabilities。
-未通过 / 未验证：本地 Docker daemon 未运行；GitHub Actions 未触发；生产服务器架构、宝塔 MySQL、HTTPS、微信与真机未验证。
+实际检查：Windows 本地 Node.js 24.12.0、MySQL 8.4.9；`npm ci`、`npm run check`、`npm run build`、`npm start`、`GET /api/activity`、`npm run db:schema`、`GET /health` 均成功；`npm audit` 为 0 vulnerabilities。Actions run `35587927134` 的依赖、配置、前端、Docker Buildx 和元数据步骤成功。
+未通过 / 未验证：Actions 最后上传 artifact 因 GitHub 仓库存储配额已满失败；本地 Docker daemon 未运行；生产服务器架构、宝塔 MySQL、HTTPS、微信与真机未验证。
 外部缺项：服务器 `uname -m`、GitHub Actions 实际运行授权/额度、生产数据库凭据、微信 AppID/AppSecret/域名及真机。
 下一步：A1 微信身份与扫码入口；同时在确认服务器架构后运行 A6.1 Actions 构建验证。
 部署状态：未部署
 ```
 
-当前摘要（A0/A6.1）：已建立 Vue 3 + Vite、Node.js + Express、MySQL 的单根 npm 工程；活动配置含五个当前地点，地点数量由配置读取；schema 仅含 `users` 与 `checkins`。A6.1 的构建文件已入库，但当前未发出构建请求，run ID/镜像产物/服务器运行版本均不适用。
+当前摘要（A0/A6.1）：已建立 Vue 3 + Vite、Node.js + Express、MySQL 的单根 npm 工程；活动配置含五个当前地点，地点数量由配置读取；schema 仅含 `users` 与 `checkins`。A6.1 workflow 已实际构建测试镜像，但 artifact 因 GitHub 存储配额未上传；没有可交接的镜像产物或服务器运行版本。
 
-本轮文档检查：远端 `main` 与本地起点一致；依赖安装、配置/API、前端构建、临时 MySQL schema 和应用连接均有本地命令结果。Docker 与 Actions 未成功运行，不把工作流文件当作构建成功或上线证明。
+本轮文档检查：远端 `main` 与本地起点一致；依赖安装、配置/API、前端构建、临时 MySQL schema 和应用连接均有本地命令结果。Actions 的构建步骤成功但 artifact 上传失败，不把该 run 当作可下载发布包或上线证明。
