@@ -10,7 +10,30 @@
 
 已入库：产品需求、开发规格、Agent 任务、环境样例和五张视觉参考 PNG。原图在提交 `5e0a67dffd2d1788e4742695435665c2639a2510` 中已补入，本次不重绘、不覆盖。
 
-**尚无应用代码、Dockerfile、Compose 或 Actions 工作流；A0–A6 未开始。以下开发和发布流程是实现约定，不代表已经构建或部署成功。** 用户本地工作区及服务器尚未在本轮连接；MySQL、微信授权、扫码与真机都未验证。
+**A0 已完成最小可运行工程，A6.1 已完成构建准备；尚未运行 GitHub Actions、部署服务器或接入微信。** 本轮已用独立临时 MySQL 8.4.9 实际执行建表并验证 Node 连接；宝塔生产 MySQL、微信授权、扫码与真机仍未验证。
+
+## 本地运行
+
+```powershell
+npm ci
+npm run check
+npm run build
+Copy-Item .env.example .env
+npm start
+```
+
+开发页面可单独运行 `npm run dev`，默认访问 `http://localhost:5173`；后端默认监听 `http://localhost:3000`。没有填写数据库凭据时，开发环境仍可打开公开活动页；填写 `DB_*` 后启动会实际执行 `SELECT 1`。生产环境会拒绝缺少必需密钥或开启 `DEV_MOCK_ENABLED` 的配置。
+
+配置校验由 `npm run check` 执行，当前地点数量从 `config/activity.json` 动态读取。建表前准备好目标数据库后运行 `npm run db:schema`；脚本只创建 `users` 和 `checkins` 两张业务表。
+
+## 当前工程结构
+
+- `web/`：Vue 3 + Vite 页面
+- `server/`：Express 应用与 MySQL 连接
+- `config/activity.json`：唯一活动配置来源
+- `db/schema.sql`：业务表建表脚本
+- `Dockerfile`、`compose.yaml`：单 `app` 容器发布准备
+- `.github/workflows/build-image.yml`：Actions 检查、单平台镜像导出与 artifact
 
 ## 文档入口
 

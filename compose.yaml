@@ -1,0 +1,10 @@
+services:
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    restart: unless-stopped
+    env_file:
+      - ${RUNTIME_ENV_FILE:-.env.runtime}
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    volumes:
+      - ${UPLOAD_HOST_DIR:?UPLOAD_HOST_DIR is required}:/var/lib/changqi/uploads

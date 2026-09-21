@@ -1,0 +1,20 @@
+{
+  "activityName": "长岐村漫游打卡",
+  "enabled": true,
+  "rules": {
+    "photoRequired": true,
+    "maxPhotoBytes": 15728640
+  },
+  "claimLocationText": "请前往现场礼品领取处，具体位置以现场指引为准",
+  "wechat": {
+    "officialAccountName": "印象芦苞",
+    "guideText": "请从公众号底部菜单进入活动页面，再使用页面内的扫一扫完成打卡。"
+  },
+  "points": [
+    { "key": "p01", "name": "葫芦娃", "image": null, "displayOrder": 1 },
+    { "key": "p02", "name": "卢氏大宗祠", "image": null, "displayOrder": 2 },
+    { "key": "p03", "name": "沉香古井", "image": null, "displayOrder": 3 },
+    { "key": "p04", "name": "苞榕", "image": null, "displayOrder": 4 },
+    { "key": "p05", "name": "文笔山顶", "image": null, "displayOrder": 5 }
+  ]
+}

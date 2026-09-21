@@ -1,0 +1,96 @@
+name: Build application image
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Target single-platform image (verify with server uname -m before production use)
+        required: true
+        type: choice
+        options:
+          - linux/amd64
+          - linux/arm64
+        default: linux/amd64
+      server_arch_verified:
+        description: Mark true only after the target server architecture was measured
+        required: true
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - .github/build-request.txt
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+      PLATFORM_VERIFIED: ${{ inputs.server_arch_verified || false }}
+    steps:
+      - name: Check out the requested commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate configuration
+        run: npm run check
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare build metadata
+        id: meta
+        shell: bash
+        run: |
+          short_sha="${GITHUB_SHA:0:12}"
+          image_tag="changqi-checkin-h5:${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          artifact_name="changqi-image-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Build single-platform image
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: docker buildx build --platform "$IMAGE_PLATFORM" --tag "$IMAGE_TAG" --load .
+
+      - name: Export image and metadata
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          ARTIFACT_NAME: ${{ steps.meta.outputs.artifact_name }}
+        run: |
+          mkdir -p release
+          docker save "$IMAGE_TAG" | gzip > "release/${ARTIFACT_NAME}.tar.gz"
+          cp compose.yaml release/compose.yaml
+          node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            writeFileSync("release/build-info.json", JSON.stringify({
+              sourceSha: process.env.GITHUB_SHA,
+              runId: Number(process.env.GITHUB_RUN_ID),
+              runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+              platform: process.env.IMAGE_PLATFORM,
+              platformVerified: process.env.PLATFORM_VERIFIED === "true",
+              imageTag: process.env.IMAGE_TAG,
+              builtAt: new Date().toISOString()
+            }, null, 2) + "\n");
+          '
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: release/
+          retention-days: 3
