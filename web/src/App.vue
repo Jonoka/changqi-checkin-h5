@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { api, post } from './api.js'
 import { createScanner, loadWechatSdk } from './wechat-scan.js'
+import PhotoPanel from './PhotoPanel.vue'
 
 const activity = ref(null)
 const error = ref('')
@@ -10,6 +11,8 @@ const identityState = ref('loading')
 const identityMessage = ref('')
 const selectedKey = ref('')
 const scanNotice = ref('')
+const scannedKey = ref('')
+const uploadBusy = ref(false)
 const demoResult = ref('')
 const demoBusy = ref(false)
 const scannerState = reactive({ phase: 'idle', message: '' })
@@ -18,16 +21,31 @@ const signatureUrl = window.location.href.split('#')[0]
 const selectedPoint = computed(() => activity.value?.points.find((point) => point.key === selectedKey.value))
 const routeError = ref('')
 let identityBusy = false
+let stateRevision = 0
+function updateMe(state) {
+  stateRevision++
+  if (me.value && state.userLabel !== me.value.userLabel) { scannedKey.value = ''; scanNotice.value = '' }
+  me.value = state
+}
+function setUploadBusy(value) {
+  uploadBusy.value = value
+  if (value) stateRevision++ // Discard an older in-flight progress response once an upload starts.
+}
 
 function loginFailure(cause) {
   if (cause.code === 'NEED_LOGIN') {
     me.value = null
     identityState.value = 'need-login'
+    scannedKey.value = ''
     identityMessage.value = '身份已失效，请重新进入活动'
+    stateRevision++
+    scanNotice.value = ''
   }
 }
 
 function showScannedPoint(result) {
+  if (uploadBusy.value) return
+  scannedKey.value = result.point.key
   selectedKey.value = result.point.key
   scanNotice.value = result.alreadyCompleted ? '此地点已有完成记录；本次扫码未改变进度。' : '已识别当前扫码地点；扫码本身不会增加进度。'
   window.location.hash = `point/${result.point.key}`
@@ -51,12 +69,14 @@ function readRoute() {
 }
 
 function viewPoint(point) {
+  if (uploadBusy.value) return
   scanNotice.value = ''
   selectedKey.value = point.key
   window.location.hash = `point/${point.key}`
 }
 
 function backHome() {
+  if (uploadBusy.value) return
   selectedKey.value = ''
   scanNotice.value = ''
   window.location.hash = ''
@@ -81,17 +101,23 @@ function tryAutomaticLogin() {
 }
 
 async function loadMe(automatic = false) {
-  if (identityBusy || demoBusy.value) return
+  if (identityBusy || demoBusy.value || uploadBusy.value) return
   identityBusy = true
+  const revision = stateRevision
   if (!me.value) identityState.value = 'loading'
   identityMessage.value = ''
   try {
-    me.value = await api('/api/me')
+    const state = await api('/api/me')
+    if (revision !== stateRevision || uploadBusy.value) return
+    updateMe(state)
     identityState.value = 'ready'
     try { sessionStorage.removeItem('changqi.oauth-attempt') } catch { /* No stored identity. */ }
     if (inWechat && !activity.value.developmentDemo && scannerState.phase === 'idle') await scanner.initialize()
   } catch (cause) {
+    if (revision !== stateRevision || uploadBusy.value) return
     me.value = null
+    scannedKey.value = ''
+    scanNotice.value = ''
     identityState.value = cause.code === 'NEED_LOGIN' ? 'need-login' : 'error'
     identityMessage.value = cause.message
     if (automatic && cause.code === 'NEED_LOGIN') tryAutomaticLogin()
@@ -109,14 +135,15 @@ async function loadActivity() {
 }
 
 async function demoLogin(identity) {
-  if (demoBusy.value || identityBusy) return
+  if (demoBusy.value || identityBusy || uploadBusy.value) return
+  scannedKey.value = ''
   demoBusy.value = true
   me.value = null
   identityState.value = 'loading'
   identityMessage.value = ''
   scanNotice.value = ''
   try {
-    me.value = await post('/api/dev/login', { identity })
+    updateMe(await post('/api/dev/login', { identity }))
     identityState.value = 'ready'
   } catch (cause) {
     identityState.value = 'error'
@@ -125,7 +152,7 @@ async function demoLogin(identity) {
 }
 
 async function demoScan() {
-  if (demoBusy.value) return
+  if (demoBusy.value || uploadBusy.value) return
   demoBusy.value = true
   scannerState.message = '正在识别开发演示二维码…'
   try {
@@ -184,14 +211,14 @@ onUnmounted(() => {
       </div>
 
       <div v-if="activity.developmentDemo" class="demo-controls">
-        <button type="button" :disabled="demoBusy" @click="demoLogin('visitor-a')">演示游客 A</button>
-        <button type="button" :disabled="demoBusy" @click="demoLogin('visitor-b')">演示游客 B</button>
+        <button type="button" :disabled="demoBusy || uploadBusy" @click="demoLogin('visitor-a')">演示游客 A</button>
+        <button type="button" :disabled="demoBusy || uploadBusy" @click="demoLogin('visitor-b')">演示游客 B</button>
         <label for="demo-qr">开发演示：输入完整地点二维码 URL</label>
         <input id="demo-qr" v-model="demoResult" type="text" autocomplete="off" />
-        <button type="button" :disabled="!me || !activity.enabled || demoBusy" @click="demoScan">识别演示地点码</button>
+        <button type="button" :disabled="!me || !activity.enabled || demoBusy || uploadBusy" @click="demoScan">识别演示地点码</button>
       </div>
       <div v-else class="scan-controls">
-        <button type="button" :disabled="!me || !inWechat || !activity.enabled || scannerState.phase !== 'ready'" @click="scanner.scan">扫一扫打卡</button>
+        <button type="button" :disabled="!me || !inWechat || !activity.enabled || uploadBusy || scannerState.phase !== 'ready'" @click="scanner.scan">扫一扫打卡</button>
         <button v-if="me && inWechat && ['error', 'idle'].includes(scannerState.phase)" type="button" class="secondary" @click="scanner.initialize">重新准备扫一扫</button>
       </div>
       <p v-if="scannerState.message" class="notice" role="status">{{ scannerState.message }}</p>
@@ -200,8 +227,11 @@ onUnmounted(() => {
         <h2>{{ selectedPoint.name }}</h2>
         <p>{{ !me ? '登录后查看本人的完成状态' : me.completedKeys.includes(selectedPoint.key) ? '本人已有该地点的完成记录' : '该地点尚未完成' }}</p>
         <p>{{ scanNotice || '仅查看地点；点击地图或列表不会取得扫码资格。' }}</p>
-        <p class="notice">照片上传将在下一阶段接入</p>
-        <button type="button" class="secondary" @click="backHome">返回地点列表</button>
+        <PhotoPanel v-if="me" :key="`${me.userLabel}:${selectedPoint.key}`" :point="selectedPoint" :me="me"
+          :enabled="activity.enabled" :scanned="scannedKey === selectedPoint.key" :max-bytes="Math.min(activity.rules.maxPhotoBytes, 15 * 1024 * 1024)"
+          @state="updateMe" @busy="setUploadBusy" @login-required="loginFailure" @scan-required="scannedKey = ''" />
+        <p v-else>请先恢复本人身份，再扫码上传现场照片。</p>
+        <button type="button" class="secondary" :disabled="uploadBusy" @click="backHome">返回地点列表</button>
       </section>
       <template v-else>
         <p v-if="selectedKey || routeError" role="alert">{{ routeError || '地点不存在，请从列表重新选择' }}</p>

@@ -1,4 +1,19 @@
 import { randomBytes } from 'node:crypto'
+import { HttpError } from './http.js'
+
+export function requireUserSession(pool, runtime) {
+  return async (request, _response, next) => {
+    const id = request.session?.userId
+    if (typeof id !== 'string' || !/^\d+$/.test(id) || (!runtime.mockEnabled && request.session.developmentIdentity)) {
+      throw new HttpError(401, 'NEED_LOGIN', '身份已失效，请重新进入活动')
+    }
+    const user = pool && await findUser(pool, id)
+    if (!user) throw new HttpError(401, 'NEED_LOGIN', '身份已失效，请重新进入活动')
+    request.currentUser = user
+    next()
+  }
+}
+
 
 export async function findUser(pool, id) {
   const [rows] = await pool.execute('SELECT id, claim_code, claimed_at FROM users WHERE id = ?', [id])

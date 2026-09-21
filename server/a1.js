@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { HttpError, sendPage } from './http.js'
 import { cookieName, discardSession, regenerateSession, saveSession } from './session.js'
-import { findOrCreateUser, findUser, userProgress } from './identity.js'
+import { findOrCreateUser, requireUserSession, userProgress } from './identity.js'
 import { parsePointQr, safeReturnTo } from './wechat.js'
 
 export function mountGuide(app, activity, runtime) {
@@ -33,16 +33,7 @@ export function mountIdentityAndScan(app, { pool, runtime, wechatClient, session
     request.session.developmentIdentity = developmentIdentity
     await saveSession(request)
   }
-  async function requireUser(request, _response, next) {
-    const id = request.session?.userId
-    if (typeof id !== 'string' || !/^\d+$/.test(id) || (!runtime.mockEnabled && request.session.developmentIdentity)) {
-      throw new HttpError(401, 'NEED_LOGIN', '身份已失效，请重新进入活动')
-    }
-    const user = pool && await findUser(pool, id)
-    if (!user) throw new HttpError(401, 'NEED_LOGIN', '身份已失效，请重新进入活动')
-    request.currentUser = user
-    next()
-  }
+  const requireUser = requireUserSession(pool, runtime)
   function requireSameOriginJson(request) {
     const origin = request.get('origin')
     if (origin && origin !== runtime.publicOrigin) throw new HttpError(403, 'INVALID_ORIGIN', '请从本活动页面操作')

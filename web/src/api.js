@@ -1,7 +1,8 @@
 export async function api(path, options = {}) {
+  const { timeoutMs = 12000, ...requestOptions } = options
   let response
   try {
-    response = await fetch(path, { credentials: 'same-origin', ...options, signal: AbortSignal.timeout(12000) })
+    response = await fetch(path, { credentials: 'same-origin', ...requestOptions, signal: requestOptions.signal || AbortSignal.timeout(timeoutMs) })
   } catch {
     throw new Error('网络暂时不可用，请检查连接后重试')
   }

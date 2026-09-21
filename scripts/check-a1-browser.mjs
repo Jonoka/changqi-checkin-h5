@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 // Optional lightweight check with an already installed Chromium browser; no test framework/dependency.
 // Native WeChat SDK callbacks below are explicitly SIMULATED. SQL/HTTP/Vue rendering remain real.
-export async function checkA1Browser({ executable, directory, origin, cookie, totalCount, afterView, afterScan }) {
+export async function checkA1Browser({ executable, directory, origin, cookie, totalCount, afterView, afterScan, afterA1 }) {
   const expectedProgress = `0/${totalCount}`
   const profile = path.join(directory, 'browser-profile')
   await fs.mkdir(profile, { recursive: true })
@@ -86,7 +86,8 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await waitFor('document.querySelector(".point-detail")', 'point viewing')
     await afterView()
     assert.match(await evaluate('document.body.textContent'), /仅查看地点/)
-    assert.match(await evaluate('document.body.textContent'), /照片上传将在下一阶段接入/)
+    assert.match(await evaluate('document.body.textContent'), /请先使用页面内扫一扫/)
+    assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false, 'Viewing a point must not enable upload')
 
     for (const outcome of ['cancel', 'fail']) {
       await click('扫一扫打卡')
@@ -119,6 +120,8 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await ready()
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     await afterScan()
+
+    if (afterA1) await afterA1({ call, evaluate, click, waitFor, buttonExpression, ready })
 
     await call('Network.clearBrowserCookies')
     await call('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 HeadlessChrome A1-NORMAL-BROWSER-TEST' })

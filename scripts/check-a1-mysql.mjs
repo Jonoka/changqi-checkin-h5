@@ -16,6 +16,9 @@ import { createMysqlSession } from '../server/session.js'
 import { createWechatClient } from '../server/wechat.js'
 import { findOrCreateUser } from '../server/identity.js'
 import { checkA1Browser } from './check-a1-browser.mjs'
+import { checkA2Mysql, checkA2Restart } from './check-a2-mysql.mjs'
+import { checkA2Browser } from './check-a2-browser.mjs'
+const includeA2 = process.argv.includes('--a2')
 
 // Intentionally no DB_* fallback: only an explicitly selected local test instance is allowed.
 const settings = {
@@ -41,7 +44,7 @@ const ok = (name) => { passed++; console.log(`PASS ${passed}: ${name}`) }
 function cleanChildEnv() {
   const env = { ...process.env }
   for (const key of Object.keys(env)) {
-    if (key.startsWith('DB_') || key.startsWith('WECHAT_') || ['NODE_ENV', 'DEV_MOCK_ENABLED', 'PUBLIC_ORIGIN', 'SESSION_SECRET', 'PORT', 'REQUIRE_DB'].includes(key)) delete env[key]
+    if (key.startsWith('DB_') || key.startsWith('WECHAT_') || ['NODE_ENV', 'DEV_MOCK_ENABLED', 'PUBLIC_ORIGIN', 'SESSION_SECRET', 'PORT', 'REQUIRE_DB', 'UPLOAD_DIR'].includes(key)) delete env[key]
   }
   env.DOTENV_CONFIG_PATH = envFile
   env.DOTENV_CONFIG_QUIET = 'true'
@@ -52,6 +55,7 @@ async function writeTestEnv(overrides = {}) {
   const values = {
     NODE_ENV: 'development', PUBLIC_ORIGIN: 'http://localhost:3000', PORT: '0',
     DEV_MOCK_ENABLED: 'true', SESSION_SECRET: sessionSecret, TZ: 'Asia/Shanghai',
+    UPLOAD_DIR: path.join(tempDirectory, 'photos'),
     DB_HOST: settings.host, DB_PORT: String(settings.port), DB_USER: settings.user,
     DB_PASSWORD: settings.password, DB_NAME: database, REQUIRE_DB: 'true', ...overrides
   }
@@ -115,7 +119,7 @@ function simulatedWechat(publicOrigin) {
         if (code === 'network-failure') throw new Error('simulated private upstream error')
         if (code === 'invalid-code') return { ok: true, json: async () => ({ errcode: 40029, errmsg: 'simulated invalid code' }) }
         if (code === 'non-json') return { ok: true, json: async () => { throw new Error('simulated non-JSON') } }
-        assert.ok(['user-a', 'user-b', 'proxy-user'].includes(code), 'Unrecognized mock code must not establish identity')
+        assert.ok(['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser'].includes(code), 'Unrecognized mock code must not establish identity')
         return { ok: true, json: async () => ({ openid: `simulated-${code}`, access_token: 'simulated-oauth-token' }) }
       }
       if (url.pathname === '/cgi-bin/stable_token') return { ok: true, json: async () => ({ access_token: 'simulated-token', expires_in: 7200 }) }
@@ -130,7 +134,7 @@ async function openApp({ origin, port = 0, production = false } = {}) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) })
   const baseUrl = `http://127.0.0.1:${server.address().port}`
   const runtime = runtimeConfig({ NODE_ENV: production ? 'production' : 'test', PUBLIC_ORIGIN: origin || baseUrl,
-    SESSION_SECRET: sessionSecret, WECHAT_APP_ID: 'simulated-app', WECHAT_APP_SECRET: 'simulated-secret', UPLOAD_DIR: '/test-only' })
+    SESSION_SECRET: sessionSecret, WECHAT_APP_ID: 'simulated-app', WECHAT_APP_SECRET: 'simulated-secret', UPLOAD_DIR: production ? '/test-only' : path.join(tempDirectory, 'photos') })
   sessions = await createMysqlSession(pool, runtime)
   const app = createApp({ activityConfig: activity, pool, runtime, sessionMiddleware: sessions.middleware, wechatClient: simulatedWechat(runtime.publicOrigin) })
   server.on('request', app)
@@ -366,7 +370,7 @@ try {
   ok('production has no mock login endpoint and rejects a previously saved development identity')
 
   // Exercise the existing Vite proxy itself, including callback and public guide paths.
-  await openApp({ origin: 'http://localhost:5173', port: 3000 })
+  const proxyApp = await openApp({ origin: 'http://localhost:5173', port: 3000 })
   vite = await createViteServer({ configFile: path.resolve('web/vite.config.js'), logLevel: 'error', server: { host: '127.0.0.1', port: 5173, strictPort: true } })
   await vite.listen()
   const proxied = browser('http://127.0.0.1:5173')
@@ -381,13 +385,18 @@ try {
   assert.equal(callback.headers.get('location'), '/#point/p01')
   assert.equal((await proxied.request('/api/me')).status, 200)
   assert.equal((await proxied.request('/api/scan', { body: { result: 'http://localhost:5173/q/p01' } })).status, 200)
+  let a2
+  if (includeA2) {
+    a2 = await checkA2Mysql({ pool, activity, runtime: proxyApp.runtime, baseUrl: 'http://localhost:5173', directory: tempDirectory, browser, oauth, ok })
+  }
   if (process.env.TEST_BROWSER_EXECUTABLE) {
     const rowsBeforeBrowser = await count('checkins')
     await checkA1Browser({
       executable: process.env.TEST_BROWSER_EXECUTABLE, directory: tempDirectory,
       origin: 'http://localhost:5173', cookie: proxied.cookie, totalCount: activity.points.length,
       afterView: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p01'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
-      afterScan: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p02'); assert.equal(await count('checkins'), rowsBeforeBrowser) }
+      afterScan: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p02'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
+      afterA1: includeA2 ? async (tools) => { await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length }); ok('A2 actual Chrome file selection/preview/reselect/upload, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)') } : null
     })
     ok('ACTUAL Chromium/Vue page: real MySQL identity and unchanged progress, map-only view, SDK cancel/fail/retry/resume, reload and ordinary-browser hint; SDK SIMULATED; 390/430px no overflow')
   } else {
@@ -397,7 +406,10 @@ try {
   await closeApp()
   ok('ACTUAL Vite :5173 proxy reaches :3000 API, OAuth start/callback and /q guide; callback returns to the frontend origin')
 
-  console.log(`A1 MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
+  if (includeA2) {
+    await checkA2Restart({ start: startRealProcess, stop: stopRealProcess, browser, directory: tempDirectory, pool, ok })
+  }
+  console.log(`${includeA2 ? 'A1+A2' : 'A1'} MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
 } finally {
   activity.enabled = initialEnabled
   if (vite) await vite.close()

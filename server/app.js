@@ -6,6 +6,7 @@ import { publicActivityConfig } from './config.js'
 import { runtimeConfig } from './runtime.js'
 import { HttpError, sendApiError, sendPage } from './http.js'
 import { mountGuide, mountIdentityAndScan } from './a1.js'
+import { mountCheckins } from './checkins.js'
 
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url))
 const webDistDirectory = path.resolve(serverDirectory, '..', 'web', 'dist')
@@ -44,6 +45,7 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
   mountGuide(app, activityConfig, runtime)
   if (sessionMiddleware) app.use(['/api', '/auth'], sessionMiddleware)
   mountIdentityAndScan(app, { pool, runtime, wechatClient, sessionsAvailable: Boolean(sessionMiddleware), activityConfig })
+  mountCheckins(app, { pool, runtime, activityConfig })
   app.use('/auth', (_request, response) => sendPage(response, { status: 404, title: '入口不存在', message: '请从公众号菜单重新进入活动' }))
 
   app.use((request, response, next) => {
@@ -61,7 +63,19 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
     app.get('/', (_request, response) => response.type('text').send('Frontend is not built. Run npm run build first.'))
   }
 
-  app.use((error, request, response, next) => {
+  app.use(async (error, request, response, next) => {
+    if (response.headersSent || response.destroyed) return next(error)
+    // Early multipart rejection (for example 401) must consume/discard the remaining stream.
+    // Otherwise a proxy can observe a TCP reset instead of the intended JSON error. No file is saved.
+    if (isApiRequest(request) && request.is('multipart/form-data') && !request.readableEnded && !request.destroyed) {
+      await new Promise((resolve) => {
+        const done = () => { request.off('end', done); request.off('close', done); resolve() }
+        request.once('end', done)
+        request.once('close', done)
+        request.resume()
+      })
+      if (response.destroyed) return
+    }
     if (isApiRequest(request)) {
       if (error.type === 'entity.parse.failed') return sendApiError(response, 400, 'INVALID_JSON', '请求体不是有效 JSON')
       if (error instanceof HttpError) return sendApiError(response, error.status, error.code, error.message)
