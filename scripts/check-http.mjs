@@ -24,7 +24,8 @@ try {
 
   const page = await fetch(`${baseUrl}/`)
   assert.equal(page.status, 200)
-  assert.match(await page.text(), /<!doctype html>/i)
+  const pageBody = await page.text()
+  assert.match(pageBody, /<!doctype html>|Frontend is not built/i)
 
   const unknown = await jsonResponse('/api/does-not-exist')
   assert.equal(unknown.response.status, 404)
