@@ -37,6 +37,30 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   assert.equal(await evaluate('Boolean(document.querySelector(".local-preview"))'), false)
   assert.equal(await progress(), `0/${totalCount}`)
   await scan('p01'); await chooseFile(samplePath)
+  // Both requests fail before reaching the server: a second failed verification must keep retry locked.
+  await evaluate(`window.__a2OriginalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const url = String(args[0]);
+      if (url === '/api/checkins' || url === '/api/me') throw new TypeError('SIMULATED network failure');
+      return window.__a2OriginalFetch(...args);
+    }`)
+  await click('提交现场照片')
+  await waitFor('document.body.textContent.includes("暂时无法确认是否保存")', 'unknown save result')
+  assert.equal(await evaluate('Boolean([...document.querySelectorAll("button")].find(b => b.textContent.trim() === "核对保存结果"))'), true)
+  assert.equal(await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "提交现场照片").disabled'), true)
+  assert.equal(await progress(), `0/${totalCount}`)
+  await click('核对保存结果')
+  await waitFor('document.body.textContent.includes("仍无法确认保存结果")', 'failed save-result verification')
+  assert.equal(await evaluate('Boolean([...document.querySelectorAll("button")].find(b => b.textContent.trim() === "核对保存结果"))'), true)
+  assert.equal(await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "提交现场照片").disabled'), true)
+  assert.equal(await progress(), `0/${totalCount}`)
+  assert.equal(await evaluate('document.body.textContent.includes("照片保存成功")'), false)
+  await evaluate('window.fetch = window.__a2OriginalFetch')
+  await click('核对保存结果')
+  await waitFor('document.body.textContent.includes("服务器尚无该地点记录")', 'confirmed unsaved result')
+  assert.equal(await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "提交现场照片").disabled'), false)
+  assert.equal(await progress(), `0/${totalCount}`)
+
   // Delay only the response delivery after the real request has saved, to inspect submit locking.
   await evaluate(`window.__a2OriginalFetch = window.fetch; window.__a2Uploads = 0;
     window.fetch = async (...args) => {

@@ -396,7 +396,7 @@ try {
       origin: 'http://localhost:5173', cookie: proxied.cookie, totalCount: activity.points.length,
       afterView: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p01'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
       afterScan: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p02'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
-      afterA1: includeA2 ? async (tools) => { await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length }); ok('A2 actual Chrome file selection/preview/reselect/upload, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)') } : null
+      afterA1: includeA2 ? async (tools) => { await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length }); ok('A2 actual Chrome file selection/preview/reselect/upload, unknown-result retry lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)') } : null
     })
     ok('ACTUAL Chromium/Vue page: real MySQL identity and unchanged progress, map-only view, SDK cancel/fail/retry/resume, reload and ordinary-browser hint; SDK SIMULATED; 390/430px no overflow')
   } else {
