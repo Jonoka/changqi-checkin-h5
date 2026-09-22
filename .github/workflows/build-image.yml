@@ -152,7 +152,7 @@ jobs:
           assert_contains activity "$activity" '长岐村漫游打卡'
           assert_contains home "$home" '<!doctype html>'
           assert_contains guide "$guide" '参与方式'
-          status="$(curl --silent --show-error --output /tmp/changqi-invalid-claim.html --write-out '%{http_code}' http://127.0.0.1:18080/r/not-a-claim)"
+          status="$(curl --silent --show-error --output /tmp/changqi-invalid-claim.json --write-out '%{http_code}' http://127.0.0.1:18080/api/r/not-a-claim)"
           test "$status" = 404
 
           if docker run --rm --network "$network" \
