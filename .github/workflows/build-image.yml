@@ -116,6 +116,7 @@ jobs:
               break
             fi
             if [ "$attempt" -eq 30 ]; then
+              docker inspect --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$app"
               docker logs "$app"
               exit 1
             fi
