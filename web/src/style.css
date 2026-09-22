@@ -118,7 +118,8 @@ button.back-button { color: var(--forest); background: transparent; border: 0; p
 .back-button span { margin-right: 4px; }
 .point-detail { padding: 0; margin: 0; }
 .point-heading { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
-.point-heading h2 { font-family: "STKaiti","KaiTi",serif; font-size: 28px; }
+/* Route headings receive programmatic focus, but are not interactive controls. */
+.point-heading h2 { font-family: "STKaiti","KaiTi",serif; font-size: 28px; border: 0; outline: none; }
 .point-heading .point-index { width: 34px; height: 34px; background: #efdfb3; font-size: 18px; }
 .point-heading .paper-tag { margin-left: auto; }
 .point-heading .eyebrow { margin-bottom: 3px; font-size: 10px; }
@@ -130,8 +131,6 @@ button.back-button { color: var(--forest); background: transparent; border: 0; p
 .art-unavailable { display: grid; place-items: center; width: 100%; aspect-ratio: 3/2; padding: 10px; color: var(--muted); background: var(--leaf); font-size: 12px; text-align: center; }
 .art-thumbnail .art-unavailable, .art-landmark .art-unavailable { padding: 3px; font-size: 10px; }
 .art-caption { color: var(--muted); font-size: 10px; text-align: right; margin: 3px 0 10px; }
-.photo-tip { font-size: 13px; padding: 10px 12px; margin: 10px 0; background: #ecefdd; border-left: 3px solid #c4a158; border-radius: 0 9px 9px 0; }
-.photo-tip strong { display: block; font-size: 11px; color: #82703e; margin-bottom: 3px; }
 .scan-notice { font-size: 11px; margin: 3px 0 8px; }
 .photo-panel { padding-top: 4px; overflow-wrap: anywhere; }
 .privacy-note { font-size: 11px; color: var(--muted); }

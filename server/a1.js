@@ -9,7 +9,7 @@ export function mountGuide(app, activity, runtime) {
     const point = activity.points.find((item) => item.key === request.params.pointKey)
     if (!point) return sendPage(response, { status: 404, title: '地点不存在', code: 'INVALID_POINT', message: '地点不存在，请扫描现场活动二维码', demo: runtime.mockEnabled })
     return sendPage(response, {
-      title: `${point.name} · 公众号入口引导`, demo: runtime.mockEnabled, guide: true,
+      title: '参与方式', demo: runtime.mockEnabled, guide: true,
       message: activity.wechat.guideText,
       officialAccountName: activity.wechat.officialAccountName,
       officialAccountQr: activity.wechat.officialAccountQr,

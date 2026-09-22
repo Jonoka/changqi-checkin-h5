@@ -386,7 +386,7 @@ try {
   assert.match((await proxied.request('/')).text, /\/src\/main.js/)
   assert.equal((await proxied.request('/api/activity')).status, 200)
   assert.equal((await proxied.request('/api/does-not-exist')).status, 404)
-  assert.match((await proxied.request('/q/p01')).text, /公众号入口引导/)
+  assert.match((await proxied.request('/q/p01')).text, /<h1>参与方式<\/h1>/)
   const proxyOAuth = await beginOAuth(proxied)
   assert.equal(proxyOAuth.searchParams.get('redirect_uri'), 'http://localhost:5173/auth/callback')
   const callback = await proxied.request(`/auth/callback?state=${proxyOAuth.searchParams.get('state')}&code=proxy-user`)

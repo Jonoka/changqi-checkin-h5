@@ -59,7 +59,7 @@ async function submit() {
         return api('/api/checkins', { method: 'POST', body, timeoutMs: 60000 })
       },
       readState: async () => {
-        if (alive) { phase.value = 'verifying'; message.value = '正在核对本人保存结果…' }
+        if (alive) { phase.value = 'verifying'; message.value = '正在核对保存结果…' }
         return api('/api/me')
       }
     })
@@ -135,14 +135,14 @@ onUnmounted(() => {
 <template>
   <div class="photo-panel" :data-phase="phase" :aria-busy="busy">
     <div v-if="completed" class="success-card" role="status">
-      <div class="success-copy"><span class="success-mark" aria-hidden="true">✓</span><div><h3>{{ phase === 'success' ? '打卡成功' : '本站已完成' }}</h3><p>{{ point.name }} · 已保存本人现场照片</p></div></div>
-      <p v-if="me.claimedAt">已领取礼品，感谢参与这次漫游。</p><p v-else-if="!enabled">活动已结束，已有记录仍可查看。</p><p v-else-if="me.allCompleted">全部地点已完成，可以查看本人的领取凭证。</p>
+      <div class="success-copy"><span class="success-mark" aria-hidden="true">✓</span><div><h3>{{ phase === 'success' ? '打卡成功' : '本站已完成' }}</h3><p>{{ point.name }} · 已保存现场照片</p></div></div>
+      <p v-if="me.claimedAt">已领取礼品，感谢参与这次漫游。</p><p v-else-if="!enabled">活动已结束，已有记录仍可查看。</p><p v-else-if="me.allCompleted">全部地点已完成，可以查看领取凭证。</p>
       <button v-if="me.allCompleted && enabled && !me.claimedAt" type="button" class="success-next" @click="emit('claim')">查看领取凭证</button>
       <button v-else type="button" class="success-next" @click="emit('continue')">{{ me.claimedAt ? '返回地图' : '继续探索' }}</button>
     </div>
     <template v-if="completed">
-      <p v-if="photoLoading" role="status">正在读取本人照片…</p>
-      <img v-if="photoUrl" class="photo-preview saved-photo" :src="photoUrl" :alt="`${point.name}：本人的打卡照片`" />
+      <p v-if="photoLoading" role="status">正在读取照片…</p>
+      <img v-if="photoUrl" class="photo-preview saved-photo" :src="photoUrl" :alt="`${point.name}：打卡照片`" />
       <p v-if="photoMessage" role="status">{{ photoMessage }}</p>
       <button v-if="photoMessage" type="button" class="secondary" @click="loadPhoto">重试读取照片</button>
       <p class="privacy-note">照片不公开展示；已完成地点不替换照片。</p>
@@ -157,7 +157,7 @@ onUnmounted(() => {
         <input :id="`photo-${point.key}`" ref="input" class="photo-input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" :aria-describedby="`photo-help-${point.key}`" :disabled="busy || phase === 'unknown'" @change="choose" />
         <label class="upload-label" :for="`photo-${point.key}`" :aria-disabled="busy || phase === 'unknown'">
           <svg v-if="!file" class="camera-mark" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 8h8l3-5h10l3 5h8v21H4Z"/><circle cx="20" cy="18" r="7"/></svg>
-          <strong>{{ file ? '重新选择照片' : '选择现场照片' }}</strong><small v-if="!file">拍照或从相册选择</small>
+          <strong>{{ file ? '重新选择照片' : '上传现场照片' }}</strong><small v-if="!file">拍照或从相册选择</small>
         </label>
       </div>
       <p class="privacy-note">照片仅用于本次活动记录，不公开展示。</p>

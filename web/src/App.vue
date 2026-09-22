@@ -245,7 +245,6 @@ onUnmounted(() => {
           <div class="point-heading"><span class="point-index">{{ selectedPoint.displayOrder }}</span><div><p class="eyebrow">这一站的风景</p><h2 tabindex="-1">{{ selectedPoint.name }}</h2></div><span class="paper-tag">{{ me?.completedKeys.includes(selectedPoint.key) ? '已完成' : '照片打卡' }}</span></div>
           <PointArt :key="selectedPoint.key" :point="selectedPoint" eager />
           <p class="art-caption">主题概念插画 · 非现场实景</p>
-          <p class="photo-tip"><strong>拍照提示</strong>{{ selectedPoint.photoTip || '将当前地点拍入画面，注意取景安全。' }}</p>
           <IdentityStatus v-bind="identityProps" compact @refresh="loadMe()" @login="startLogin" />
           <p class="scan-notice muted">{{ scanNotice || '仅查看地点，尚未取得扫码资格。' }}</p>
           <PhotoPanel v-if="me" :key="`${me.userLabel}:${selectedPoint.key}`" :point="selectedPoint" :me="me"
@@ -260,23 +259,23 @@ onUnmounted(() => {
         </section>
 
         <section v-else-if="claimView" class="own-claim-view" aria-labelledby="claim-title">
-          <header class="claim-heading"><p class="eyebrow">你的长岐漫游记录</p><h2 id="claim-title" tabindex="-1">本人领取凭证</h2></header>
+          <header class="claim-heading"><p class="eyebrow">你的长岐漫游记录</p><h2 id="claim-title" tabindex="-1">领取凭证</h2></header>
           <IdentityStatus v-bind="identityProps" compact @refresh="loadMe()" @login="startLogin" />
           <ClaimPanel v-if="me" :key="me.userLabel" :me="me" :activity="activity" @state="updateMe" @busy="setClaimBusy" @locked="claimUncertain = $event" @login-required="loginFailure" />
-          <button v-if="me" type="button" class="text-button" :disabled="operationLocked" @click="loadMe()">刷新本人状态</button>
+          <button v-if="me" type="button" class="text-button" :disabled="operationLocked" @click="loadMe()">刷新状态</button>
         </section>
 
         <template v-else>
           <IdentityStatus v-bind="identityProps" @refresh="loadMe()" @login="startLogin" />
           <p v-if="selectedKey || routeError" role="alert">{{ routeError || '地点不存在，请从地图重新选择' }}</p>
+          <ScanControls v-if="!me?.claimedAt" v-bind="scanProps" :secondary="me?.allCompleted" @scan="scanner.scan" @prepare="scanner.initialize" @demo-scan="demoScan" @update:demo-result="demoResult = $event" />
+          <p v-if="!me?.allCompleted && activity.enabled" class="claim-hint">集齐 {{ activity.points.length }} 处照片印记后，可前往现场领取礼品。</p>
           <VillageMap :points="activity.points" :completed-keys="me?.completedKeys || []" :logged-in="Boolean(me)" :disabled="operationLocked" @view="viewPoint" />
           <section v-if="me?.allCompleted" class="reward-next" aria-live="polite">
-            <template v-if="me.claimedAt"><p class="claimed-status">已领取礼品 · 谢谢参与这次漫游</p><button type="button" class="secondary" @click="viewClaim">查看本人领取记录</button></template>
+            <template v-if="me.claimedAt"><p class="claimed-status">已领取礼品 · 谢谢参与这次漫游</p><button type="button" class="secondary" @click="viewClaim">查看领取记录</button></template>
             <template v-else-if="activity.enabled"><p>漫游印记已集齐，去领取你的纪念礼品吧。</p><button type="button" class="claim-link" @click="viewClaim">查看领取凭证</button></template>
             <p v-else>活动已结束，已有漫游记录仍可查看。</p>
           </section>
-          <ScanControls v-if="!me?.claimedAt" v-bind="scanProps" :secondary="me?.allCompleted" @scan="scanner.scan" @prepare="scanner.initialize" @demo-scan="demoScan" @update:demo-result="demoResult = $event" />
-          <p v-if="!me?.allCompleted && activity.enabled" class="claim-hint">集齐 {{ activity.points.length }} 处照片印记后，可前往现场领取礼品。</p>
           <details class="point-disclosure">
             <summary>查看全部地点（{{ activity.points.length }}处）</summary>
             <ul class="point-list">

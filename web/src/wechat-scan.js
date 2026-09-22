@@ -63,7 +63,7 @@ export function createScanner({ state, loadSdk, getConfig, submit, onPoint, onFa
       ])
       if (version !== generation || disposed) return false
       state.phase = 'ready'
-      state.message = '扫一扫已就绪'
+      state.message = '' // Readiness enables the button without an extra status line.
       return true
     } catch (error) {
       if (version !== generation || disposed) return false

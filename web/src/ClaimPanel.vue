@@ -24,12 +24,12 @@ onUnmounted(() => { attempt++ })
 
 <template>
   <section class="claim-panel" :class="{ 'claim-locked': !me.allCompleted }" aria-label="礼品领取">
-    <p class="voucher-owner"><span class="paper-tag">本人</span><strong>{{ me.userLabel }}</strong></p>
+    <p class="voucher-owner"><strong>{{ me.userLabel }}</strong></p>
     <h3>{{ me.claimedAt ? '礼品已领取' : !activity.enabled ? '活动已结束' : me.allCompleted ? '漫游印记已集齐' : '还差一些漫游印记' }}</h3>
     <template v-if="me.allCompleted && !me.claimedAt && activity.enabled">
       <p>{{ activity.claimLocationText }}</p>
       <p>向工作人员出示此码，或拿到礼品后自行确认。</p>
-      <img v-if="qr" class="claim-qr" :src="qr" alt="本人礼品领取二维码" />
+      <img v-if="qr" class="claim-qr" :src="qr" alt="礼品领取二维码" />
       <p v-if="qrError" role="alert">{{ qrError }} <button type="button" @click="makeQr">重试二维码</button></p>
       <p class="privacy-note">仅打开凭证不会标记领取。此码只向现场工作人员出示，不转发。</p>
     </template>

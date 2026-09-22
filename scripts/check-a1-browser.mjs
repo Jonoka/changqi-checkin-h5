@@ -109,6 +109,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
       assert.equal(await evaluate('window.__simulatedScan.needResult'), 1)
       await evaluate(`window.__simulatedScan.${outcome}()`)
       await ready()
+      assert.match(await evaluate('document.querySelector(".scan-message").textContent'), outcome === 'cancel' ? /已取消扫码/ : /相机权限/, 'cancel/permission feedback remains visible even when the scanner is ready again')
     }
     await click('扫一扫打卡')
     await evaluate(`window.__simulatedScan.success({ resultStr: ${JSON.stringify(`${origin}/r/not-a-point`)} })`)

@@ -14,7 +14,7 @@ function validPoint(activity, key) {
   }
   return key
 }
-const uploadFailed = () => new HttpError(500, 'UPLOAD_FAILED', '照片暂时无法保存，请刷新本人状态后重试')
+const uploadFailed = () => new HttpError(500, 'UPLOAD_FAILED', '照片暂时无法保存，请刷新状态后重试')
 
 export function mountCheckins(app, { pool, runtime, activityConfig }) {
   const requireUser = requireUserSession(pool, runtime)
@@ -108,7 +108,7 @@ export function mountCheckins(app, { pool, runtime, activityConfig }) {
   app.get('/api/me/photos/:pointKey', requireUser, async (request, response) => {
     const pointKey = validPoint(activityConfig, request.params.pointKey)
     const record = await findCheckin(pool, request.currentUser.id, pointKey)
-    if (!record) throw new HttpError(404, 'PHOTO_NOT_FOUND', '本人尚无该地点的照片记录')
+    if (!record) throw new HttpError(404, 'PHOTO_NOT_FOUND', '尚无该地点的照片记录')
     const filename = storedPhotoPath(runtime.uploadDir, record.photo_path)
     let file
     try {

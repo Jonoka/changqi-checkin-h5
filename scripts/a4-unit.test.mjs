@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import sharp from 'sharp'
 import { sendPage } from '../server/http.js'
+import { mountGuide } from '../server/a1.js'
+import { createScanner } from '../web/src/wechat-scan.js'
 import { createHash } from 'node:crypto'
 import { loadActivityConfig, validateActivityConfig } from '../server/config.js'
 import { villageMapLayout } from '../web/src/map-layout.js'
@@ -12,6 +14,41 @@ function renderPage(options) {
   const response = { statusCode: null, headers: {}, set(name, value) { this.headers[name] = value; return this }, status(code) { this.statusCode = code; return this }, type() { return this }, send(html) { this.html = html; return this } }
   return sendPage(response, options)
 }
+
+test('A4: all valid location guides use the participation title without granting scan eligibility', () => {
+  const activity = loadActivityConfig()
+  let handler
+  mountGuide({ get(route, callback) { assert.equal(route, '/q/:pointKey'); handler = callback } }, activity, { mockEnabled: false })
+  for (const point of activity.points) {
+    const response = { headers: {}, set(name, value) { this.headers[name] = value; return this }, status(code) { this.statusCode = code; return this }, type() { return this }, send(html) { this.html = html; return this } }
+    handler({ params: { pointKey: point.key } }, response)
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.headers['Cache-Control'], 'no-store')
+    assert.match(response.html, /<title>参与方式<\/title>/)
+    assert.match(response.html, /<h1>参与方式<\/h1>/)
+    assert.doesNotMatch(response.html, /公众号入口引导|type="file"/)
+  }
+})
+
+test('A4: scanner ready is silent while cancellation and permission feedback remain visible', async () => {
+  const state = { phase: 'idle', message: '' }
+  let ready, scanOptions
+  const sdk = { config() {}, error() {}, ready(callback) { ready = callback }, scanQRCode(options) { scanOptions = options } }
+  const scanner = createScanner({ state, loadSdk: async () => sdk, getConfig: async () => ({}), submit: async () => ({}), onPoint() {} })
+  try {
+    const initializing = scanner.initialize()
+    for (let attempt = 0; attempt < 10 && !ready; attempt++) await Promise.resolve()
+    assert.equal(typeof ready, 'function', 'SDK ready handler is registered')
+    assert.equal(state.phase, 'initializing')
+    assert.match(state.message, /正在准备/)
+    ready(); assert.equal(await initializing, true)
+    assert.equal(state.phase, 'ready'); assert.equal(state.message, '')
+    const cancelled = scanner.scan(); scanOptions.cancel(); await cancelled
+    assert.equal(state.phase, 'ready'); assert.match(state.message, /已取消扫码/)
+    const denied = scanner.scan(); scanOptions.fail(); await denied
+    assert.equal(state.phase, 'ready'); assert.match(state.message, /相机权限/)
+  } finally { scanner.dispose() }
+})
 
 test('A4: standalone guide escapes content, has no fake QR or direct upload/auth button and remains non-cacheable', () => {
   const page = renderPage({ title: '<script>bad()</script>', message: '<img src=x onerror=bad()>', guide: true })

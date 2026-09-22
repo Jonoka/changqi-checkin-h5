@@ -3,7 +3,7 @@
 export async function uploadWithRecovery({ pointKey, file, upload, readState }) {
   try {
     const state = await upload(pointKey, file)
-    if (!state?.completedKeys?.includes(pointKey)) throw new Error('保存结果不完整，请核对本人状态')
+    if (!state?.completedKeys?.includes(pointKey)) throw new Error('保存结果不完整，请核对状态')
     return { state, recovered: false }
   } catch (cause) {
     let state

@@ -30,7 +30,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   const actualPixels = await sharp(Buffer.from(firstQr.split(',')[1], 'base64')).ensureAlpha().raw().toBuffer()
   const expectedPixels = await sharp(Buffer.from(expectedQr.split(',')[1], 'base64')).ensureAlpha().raw().toBuffer()
   assert.deepEqual(actualPixels, expectedPixels, 'owner QR pixels encode the canonical staff claim URL')
-  await click('刷新本人状态')
+  await click('刷新状态')
   await waitFor('document.querySelector(".claim-qr")?.naturalWidth > 0', 'same claim QR after refresh')
   assert.equal(await evaluate('document.querySelector(".claim-qr").src'), firstQr)
   await assertUiClaim('self', false)

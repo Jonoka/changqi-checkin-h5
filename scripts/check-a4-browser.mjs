@@ -7,11 +7,18 @@ import { execFileSync } from 'node:child_process'
 const versionFiles = [
   'config/activity.json',
   'server/config.js',
+  'server/a1.js',
+  'server/http.js',
+  'server/checkins.js',
   'web/src/App.vue',
   'web/src/VillageMap.vue',
   'web/src/PointArt.vue',
   'web/src/PhotoPanel.vue',
   'web/src/ClaimPanel.vue',
+  'web/src/IdentityStatus.vue',
+  'web/src/ScanControls.vue',
+  'web/src/wechat-scan.js',
+  'web/src/photo-upload.js',
   'web/src/style.css',
   'web/public/art/map-environment.webp',
   'web/public/art/point-p01-gourd.webp',
@@ -57,10 +64,39 @@ export function createA4Capture({ call, evaluate, directory }) {
   return async function capture(name) {
     assert.match(name, /^[a-z0-9-]+$/)
     for (const width of [320, 390, 430]) {
-      await call('Emulation.setDeviceMetricsOverride', { width, height: width === 320 ? 740 : 844, deviceScaleFactor: 1, mobile: true })
+      const viewportHeight = ['home', 'logged-out'].includes(name) ? 568 : width === 320 ? 740 : 844
+      await call('Emulation.setDeviceMetricsOverride', { width, height: viewportHeight, deviceScaleFactor: 1, mobile: true })
+      await evaluate('window.scrollTo(0, 0)')
       await evaluate(`[...document.querySelectorAll('img[loading="lazy"]')].forEach(image => image.loading = 'eager')`)
       await evaluate(`document.fonts.ready.then(() => Promise.all([...document.images].map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.addEventListener('load', resolve, {once:true}); image.addEventListener('error', resolve, {once:true}); setTimeout(resolve, 2000) }))))`)
       assert.equal(await evaluate('document.documentElement.scrollWidth'), width, `${name}: no horizontal overflow at ${width}px`)
+      assert.doesNotMatch(await evaluate('document.body.innerText'), /本人|扫一扫已就绪|选择现场照片|拍照提示/, `${name}: compact visitor-facing copy`)
+      assert.equal(await evaluate('Boolean(document.querySelector(".photo-tip"))'), false, `${name}: no photography-tip block`)
+      const headingStyle = await evaluate(`(() => { const h=document.querySelector('.point-heading h2'); if(!h) return null; const s=getComputedStyle(h); return { borders:[s.borderTopWidth,s.borderRightWidth,s.borderBottomWidth,s.borderLeftWidth], outline:s.outlineStyle }; })()`)
+      if (headingStyle) {
+        assert.deepEqual(headingStyle.borders, ['0px', '0px', '0px', '0px'], `${name}: title has no border`)
+        assert.equal(headingStyle.outline, 'none', `${name}: programmatic heading focus has no box`)
+      }
+      const uploadLabel = await evaluate(`document.querySelector('.photo-picker:not(.has-selection) .upload-label strong')?.textContent ?? null`)
+      if (uploadLabel !== null) assert.equal(uploadLabel, '上传现场照片')
+      const claimTitle = await evaluate(`document.querySelector('#claim-title')?.textContent ?? null`)
+      if (claimTitle !== null) assert.equal(claimTitle, '领取凭证')
+      if (name === 'guide') {
+        assert.equal(await evaluate('document.querySelector("h1").textContent'), '参与方式')
+        assert.equal(await evaluate('document.title'), '参与方式')
+        assert.equal(await evaluate('document.querySelector(".guide-qr") === null'), true, 'guide has no placeholder QR')
+      }
+      let firstScreenScan = null
+      let viewportFile = null
+      if (['home', 'logged-out'].includes(name)) {
+        firstScreenScan = await evaluate(`(() => { const b=[...document.querySelectorAll('.scan-controls button')].find(b=>b.textContent.trim()==='扫一扫打卡'); const r=b.getBoundingClientRect(); const m=document.querySelector('.village-map').getBoundingClientRect(); return { top:r.top,bottom:r.bottom,mapTop:m.top,viewportHeight:innerHeight,uncovered:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)) }; })()`)
+        assert.ok(firstScreenScan.top >= 0 && firstScreenScan.bottom <= firstScreenScan.viewportHeight, `${name}: scan button fully visible without scrolling at ${width}x${viewportHeight}`)
+        assert.ok(firstScreenScan.bottom <= firstScreenScan.mapTop, `${name}: scan button above the map`)
+        assert.equal(firstScreenScan.uncovered, true, `${name}: first-screen scan button is not covered`)
+        const firstScreen = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+        viewportFile = `a4-${name}-first-screen-${width}.png`
+        await fs.writeFile(path.join(directory, viewportFile), Buffer.from(firstScreen.data, 'base64'))
+      }
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('img[src^="/art/"], img.claim-qr, img.saved-photo')].filter(image => !image.complete || image.naturalWidth === 0).map(image => image.className)`), [], `${name}: required artwork/QR/saved images loaded`)
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('button')].filter(button => button.getClientRects().length && button.getBoundingClientRect().height < 43).map(button => button.textContent.trim())`), [], `${name}: visible buttons have touch-sized targets`)
 
@@ -93,7 +129,10 @@ export function createA4Capture({ call, evaluate, directory }) {
         }
       }
 
-      records.push({ state: name, width, height: Math.ceil(size.height), file: filename, mapFile, capturedAt: new Date().toISOString(), mapAlignmentErrors: alignment })
+      // A state can be revisited; keep metadata aligned with the actual latest file.
+      const previous = records.findIndex(record => record.file === filename)
+      if (previous !== -1) records.splice(previous, 1)
+      records.push({ state: name, width, height: Math.ceil(size.height), file: filename, mapFile, viewportFile, viewportHeight, firstScreenScan, capturedAt: new Date().toISOString(), mapAlignmentErrors: alignment })
     }
     const version = await versionPromise
     await fs.writeFile(path.join(directory, 'a4-screenshots.json'), JSON.stringify({
@@ -174,7 +213,7 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
 
     const identityInjection = await call('Page.addScriptToEvaluateOnNewDocument', { source: `window.__a4Fetch=window.fetch;window.fetch=async(...args)=>{if(args[0]==='/api/me'){const response=await window.__a4Fetch(...args);await new Promise(resolve=>window.__a4Resume=resolve);throw new TypeError('SIMULATED identity read failure')}return window.__a4Fetch(...args)}` })
     await call('Page.navigate', { url: origin })
-    await waitFor('window.__a4Resume && document.body.textContent.includes("正在恢复本人身份")', 'identity loading')
+    await waitFor('window.__a4Resume && document.body.textContent.includes("正在恢复身份")', 'identity loading')
     await capture('identity-loading')
     await evaluate('window.__a4Resume()')
     await waitFor('document.body.textContent.includes("网络暂时不可用")', 'identity read failure')
@@ -210,11 +249,11 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     for (const point of originalPoints) {
       await pointerClick({ call, evaluate }, `.map-point[data-point-key="${point.key}"]`)
       await waitFor(`document.querySelector('.point-detail')?.dataset.pointKey === ${JSON.stringify(point.key)}`, `view ${point.key}`)
-      const shown = await evaluate(`(() => { const art=document.querySelector('.art-detail'); return { key:art?.dataset.artKey, name:document.querySelector('.point-heading h2')?.textContent, image:art?.querySelector('img')?.getAttribute('src'), tip:document.querySelector('.photo-tip')?.textContent, input:Boolean(document.querySelector('input[type=file]')) } })()`)
+      const shown = await evaluate(`(() => { const art=document.querySelector('.art-detail'); return { key:art?.dataset.artKey, name:document.querySelector('.point-heading h2')?.textContent, image:art?.querySelector('img')?.getAttribute('src'), tip:Boolean(document.querySelector('.photo-tip')), input:Boolean(document.querySelector('input[type=file]')) } })()`)
       assert.equal(shown.key, point.key)
       assert.equal(shown.name, point.name)
       assert.equal(shown.image, point.image)
-      assert.ok(shown.tip.includes(point.photoTip))
+      assert.equal(shown.tip, false, 'photography tips are not rendered')
       assert.equal(shown.input, false, 'map/list viewing alone never grants upload eligibility')
       await capture(`point-${point.key}-view`)
 
