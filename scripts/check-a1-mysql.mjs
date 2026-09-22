@@ -414,7 +414,7 @@ try {
         ok('A2 actual Chrome file selection/preview/reselect/upload, consecutive unknown-result lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)')
         if (includeA4) {
           await checkA4Pages({ ...tools, origin: 'http://localhost:5173', cookie: proxied.cookie, progressCookie: a2.cookie, credential: a3.credential, activity })
-          ok('A4 actual Chrome: illustrated map, collapsed/expanded list, five keyed point views/scans, config reorder/N, art fallback, 320/390/430 screenshots, guide/errors/closure/stats')
+          ok('A4 actual Chrome: illustrated map, collapsed/expanded list, five keyed point views/scans, config reorder/N, art fallback, 320/390/430 live layout assertions, guide/errors/closure/stats')
 
           const a2Ui = browser('http://localhost:5173')
           a2Ui.cookie = a2.cookie
@@ -434,8 +434,12 @@ try {
         }
         if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory }); ok('A3 actual Chrome: owner QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
         if (includeA4) {
-          console.log(`A4 visual review: ${path.relative(process.cwd(), tempDirectory)}/index.html`)
-          console.log(`A4 screenshot evidence: ${path.relative(process.cwd(), tempDirectory)}/a4-screenshots.json`)
+          if (process.env.TEST_A4_REUSE_EVIDENCE) {
+            console.log(`A4 live regression: ${path.relative(process.cwd(), tempDirectory)}/a4-regression.json; unchanged visual evidence reused from ${process.env.TEST_A4_REUSE_EVIDENCE}`)
+          } else {
+            console.log(`A4 visual review: ${path.relative(process.cwd(), tempDirectory)}/index.html`)
+            console.log(`A4 screenshot evidence: ${path.relative(process.cwd(), tempDirectory)}/a4-screenshots.json`)
+          }
         }
       } : null
     })

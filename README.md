@@ -10,6 +10,12 @@
 
 任务进度、验收结果、历史 Actions 运行和外部缺项只维护在 [docs/TASKS.md](docs/TASKS.md)。本文件说明实际运行方式，不单独维护另一份任务状态。五张既有视觉原图见 [assets/reference/README.md](assets/reference/README.md)。
 
+## 正式地址约定
+
+生产使用 `PUBLIC_ORIGIN=https://cq.fsxinhuo.cn`，不带末尾斜杠。公众号菜单计划入口为 `https://cq.fsxinhuo.cn/`，OAuth 固定回调为 `https://cq.fsxinhuo.cn/auth/callback`。游客领取视图是 `/#claim`，持码派发是 `/r/:claimCode`。域名确定不等于域名已运行本项目或微信链路已验证；实际核对结果只记 TASKS。
+
+运行代码继续读取各环境的 `PUBLIC_ORIGIN`，不要全局替换本地 Vite/隔离测试的 localhost 地址，不覆盖既有 `.env`。
+
 ## 本地运行
 
 ```powershell
@@ -57,7 +63,7 @@ npm start
 
 首页/示意地图、照片上传与成功、领取/派发沿用同一 Vue 页面和已有接口；地图节点只查看，不提供扫码资格。引导、授权错误与人数页使用服务端同风格模板，构建前仍可返回文字和错误状态。页面不依赖外部字体服务。
 
-`web/public/art/` 两张 WebP 仅从已认可原图的无文字村落区域裁取；原图未覆盖。需要复现时运行 `node scripts/prepare-a4-art.mjs`：先校验源图 SHA，已有不同内容的目标文件会拒绝覆盖。它不是正式二维码生成脚本；插画、路线不是实景测绘。Vite 在开发和构建后均从 `/art/` 提供这些静态资源。
+`web/public/art/` 使用环境底图和五张按地点 key 关联的独立概念插画，地图、列表和详情共用同一配置；五张参考原图与旧裁图仍保留。需要复现时运行 `node scripts/prepare-a4-art.mjs`，已有不同内容的目标文件拒绝覆盖。A4 已认可的页面方向和文案沿用，不重新探索视觉；插画和路线不代表实景测绘。Vite 在开发和构建后均从 `/art/` 提供这些静态资源。地点二维码由下节独立命令生成，不从效果图裁取。
 
 ### 轻量验证
 
@@ -75,7 +81,9 @@ $env:TEST_BROWSER_EXECUTABLE = 'C:\Program Files\Google\Chrome\Application\chrom
 npm run test:a1:mysql
 ```
 
-A4 执行 `npm run test:a4:mysql`，复用相同隔离 MySQL/Chrome 并包含 A1–A3 回归。设置已有 `TEST_BROWSER_EXECUTABLE` 后，额外检查指针地图查看、动态地点数量、触控尺寸、图片加载和页面错误/关闭状态，生成 `tmp/changqi_a1_test_*/a4-screenshots.json` 及 390/430px PNG；这些是本地测试截图，不是微信真机结果。未配置浏览器时仍明确 SKIP，不算 A4 画面通过。
+A4/A5 执行 `npm run test:a4:mysql`，复用相同隔离 MySQL/Chrome 并包含 A1–A3 回归，不必再重复运行各阶段全套。必须设置已有 `TEST_BROWSER_EXECUTABLE` 才包含实际浏览器检查；默认生成 `tmp/changqi_a1_test_*/a4-screenshots.json` 及 320/390/430px PNG，未配置浏览器会明确 SKIP，不算画面通过。
+
+没有运行时/素材变化时，可显式设置 `$env:TEST_A4_REUSE_EVIDENCE='tmp/已确认的A4证据目录'`。脚本核对该目录的运行时文件清单、SHA 指纹和截图文件存在后，仍执行所有宽度的实时 DOM/布局、触控、文案及业务断言，但不机械重截整套图片；本次结果另写 `a4-regression.json`，保留旧证据不改名、不冒称新截图。指纹不符或证据缺失会失败，须按影响范围补证据；不需要复用时移除该环境变量。浏览器模拟 SDK 和自动截图均不代替微信真机。
 
 A3 使用同一测试入口执行 `npm run test:a3:mysql`，包含 A1/A2 回归、两路领取、并发与固定凭据统计检查。仍须显式设置前述 `TEST_DB_*` 和 `TEST_BROWSER_EXECUTABLE`；不新增测试平台，不触发 Actions 镜像打包。
 
@@ -86,6 +94,20 @@ A2 复用同一个独立测试库/应用/浏览器入口，执行 `npm run test:
 
 会话适配器的 MySQL 驱动通过 npm `overrides` 复用根 `mysql2`，避免夹带旧驱动；正常安装并维护同一个 `package-lock.json`，不要移除该约束或使用 `npm audit fix --force`。
 
+
+## 地点二维码与待验证纸样
+
+```powershell
+npm run qr:points -- --origin https://cq.fsxinhuo.cn --out tmp/point-qrs-cq-fsxinhuo-cn
+# 测试地址必须显式 --test，并选择另一新目录：
+npm run qr:points -- --origin http://localhost:5173 --out tmp/point-qrs-local-test --test
+```
+
+也可省略 `--origin` 使用已配置的 `PUBLIC_ORIGIN`；没有默认开发地址可冒充正式地址。正式模式核对已确认的五组 key/name，并通过现有服务端 `parsePointQr` 校验载荷；测试模式仍从配置读取 N。`--out` 必须是新目录，已有目录一律拒绝，换目录生成而不覆盖历史样张。
+
+每处输出 `key-中文地点名.png/.svg`、`manifest.json`、UTF-8 `地点二维码清单.csv`、离线 `index.html` 和印刷说明。黑码白底、M 纠错、四模块白边、PNG 整数模块放大；清单记录实际源文件与码图 SHA。解压完整目录后打开 `index.html`，按实际大小/100% 试印，实测含白边码图约 50mm；标签和 URL 均在码外，不裁白边。
+
+所有最终地址样张均标“正式地址已定，待真机/纸样试扫，不可直接批量印刷。”生成不依赖数据库、公众号密钥、Docker、Actions 或第三方活码服务。生成脚本不冒称已解码；另行使用可用解码工具逐张回读 PNG/SVG 栅格图，将工具版本、实际文本、文件 SHA 与结果随样张保存。自动解码、微信两类入口和真实纸样是不同验证层，最终印刷条件见 SPEC S10。
 
 ## 当前工程结构
 
@@ -173,4 +195,4 @@ docs/DEPLOY.md 和视觉参考；读取实际分支、HEAD、文件及开放 PR�
 
 用户愿意为本地 Agent 配置服务器连接权限；不等于本轮已取得可用 SSH，也不等于授予所有会话无限生产操作权限。连接配置、目标与授权清楚后，同一发布任务内的常规步骤可连续执行，不逐条索要确认。公众号菜单或消息服务修改、删除生产数据仍单独确认。
 
-微信 AppSecret、SSH 私钥、数据库密码和用户照片不进 Git、Actions artifact 或镜像；运行凭据留在服务器，SSH 凭据由有权限的本地执行端使用。正式二维码只用最终 HTTPS 域名并经实际试扫，不将效果图假码用于印刷。
+微信 AppSecret、SSH 私钥、数据库密码和用户照片不进 Git、Actions artifact 或镜像；运行凭据留在服务器，SSH 凭据由有权限的本地执行端使用。地点码使用最终 HTTPS 地址；域名已定但公网未就绪仍可交付带警示的待验证纸样，只有微信与真实纸样试扫全部通过后才提交用户批准批量印刷，不将效果图假码用于印刷。

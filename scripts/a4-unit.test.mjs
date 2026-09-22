@@ -9,6 +9,25 @@ import { createHash } from 'node:crypto'
 import { loadActivityConfig, validateActivityConfig } from '../server/config.js'
 import { villageMapLayout } from '../web/src/map-layout.js'
 import { illustrations } from '../assets/illustrations/village-art.mjs'
+import { reusableA4Evidence } from './check-a4-browser.mjs'
+
+test('A5: visual evidence reuse rejects changed runtime, missing images and unsafe filenames', async () => {
+  await fs.mkdir('tmp', { recursive: true })
+  const dir = await fs.mkdtemp('tmp/a5-evidence-unit-')
+  const version = { runtimeSha256: 'test-fingerprint', files: [{ path: 'test-only.js', sha256: 'test-sha' }] }
+  const evidence = { version, screenshots: [{ file: 'a4-home-390.png' }] }
+  const write = () => fs.writeFile(`${dir}/a4-screenshots.json`, JSON.stringify(evidence))
+  try {
+    await write()
+    await assert.rejects(reusableA4Evidence(dir, { ...version, runtimeSha256: 'changed' }), /fingerprint changed/)
+    await assert.rejects(reusableA4Evidence(dir, { ...version, files: [] }), /same runtime/)
+    await assert.rejects(reusableA4Evidence(dir, version), { code: 'ENOENT' })
+    await fs.writeFile(`${dir}/a4-home-390.png`, 'test-only nonempty fixture; not visual evidence')
+    assert.equal((await reusableA4Evidence(dir, version)).screenshotCount, 1)
+    evidence.screenshots[0].file = '../outside.png'; await write()
+    await assert.rejects(reusableA4Evidence(dir, version), /local A4/)
+  } finally { await fs.rm(dir, { recursive: true, force: true }) }
+})
 
 function renderPage(options) {
   const response = { statusCode: null, headers: {}, set(name, value) { this.headers[name] = value; return this }, status(code) { this.statusCode = code; return this }, type() { return this }, send(html) { this.html = html; return this } }

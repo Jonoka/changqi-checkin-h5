@@ -56,13 +56,32 @@ body{margin:0;padding:24px;background:#f2f1e8;color:#254533;font:15px/1.65 syste
 </style></head><body><main><h1>长岐村 A4 本地视觉复核</h1><p>截图来自隔离 MySQL + 本机 Chrome。微信 SDK、微信网络及故障注入为模拟，不是真机验收。</p><div class="meta">分支：<code>${escapeHtml(version.branch)}</code><br>截图基准 HEAD：<code>${escapeHtml(version.head)}</code><br>运行时源码/素材指纹：<code>${escapeHtml(version.runtimeSha256)}</code><br><a href="a4-screenshots.json">查看截图元数据</a></div>${comparison}<h2>实际页面状态</h2><div class="grid">${cards}</div></main></body></html>`
 }
 
+// Explicit evidence reuse suppresses image capture, never the live DOM/business assertions.
+export async function reusableA4Evidence(directory, version) {
+  const evidence = JSON.parse(await fs.readFile(path.join(directory, 'a4-screenshots.json'), 'utf8'))
+  assert.equal(evidence.version?.runtimeSha256, version.runtimeSha256, 'A4 evidence fingerprint changed: capture affected pages instead of reusing old images')
+  assert.deepEqual(evidence.version.files, version.files, 'A4 evidence must describe the same runtime source and artwork')
+  assert.ok(evidence.screenshots?.length > 0, 'A4 evidence contains no screenshots')
+  const files = new Set(evidence.screenshots.flatMap(row => [row.file, row.mapFile, row.viewportFile]).filter(Boolean))
+  for (const file of files) {
+    assert.match(file, /^a4-[a-z0-9-]+\.png$/, 'Only local A4 screenshot filenames may be reused')
+    assert.ok((await fs.stat(path.join(directory, file))).size > 0, 'Referenced A4 screenshot is missing or empty')
+  }
+  return { directory: path.relative(process.cwd(), directory), runtimeSha256: version.runtimeSha256, screenshotCount: evidence.screenshots.length, imageFileCount: files.size }
+}
+
 // Uses the existing Chrome CDP connection and the same isolated MySQL application.
 // These are real rendered Vue/HTTP/SQL states. WeChat SDK/network failures remain explicitly simulated.
 export function createA4Capture({ call, evaluate, directory }) {
   const records = []
+  const checkedStates = new Map()
   const versionPromise = runtimeVersion()
+  let reusePromise
   return async function capture(name) {
     assert.match(name, /^[a-z0-9-]+$/)
+    const version = await versionPromise
+    const reuse = process.env.TEST_A4_REUSE_EVIDENCE
+      ? await (reusePromise ??= reusableA4Evidence(path.resolve(process.env.TEST_A4_REUSE_EVIDENCE), version)) : null
     for (const width of [320, 390, 430]) {
       const viewportHeight = ['home', 'logged-out'].includes(name) ? 568 : width === 320 ? 740 : 844
       await call('Emulation.setDeviceMetricsOverride', { width, height: viewportHeight, deviceScaleFactor: 1, mobile: true })
@@ -93,9 +112,11 @@ export function createA4Capture({ call, evaluate, directory }) {
         assert.ok(firstScreenScan.top >= 0 && firstScreenScan.bottom <= firstScreenScan.viewportHeight, `${name}: scan button fully visible without scrolling at ${width}x${viewportHeight}`)
         assert.ok(firstScreenScan.bottom <= firstScreenScan.mapTop, `${name}: scan button above the map`)
         assert.equal(firstScreenScan.uncovered, true, `${name}: first-screen scan button is not covered`)
-        const firstScreen = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-        viewportFile = `a4-${name}-first-screen-${width}.png`
-        await fs.writeFile(path.join(directory, viewportFile), Buffer.from(firstScreen.data, 'base64'))
+        if (!reuse) {
+          const firstScreen = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+          viewportFile = `a4-${name}-first-screen-${width}.png`
+          await fs.writeFile(path.join(directory, viewportFile), Buffer.from(firstScreen.data, 'base64'))
+        }
       }
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('img[src^="/art/"], img.claim-qr, img.saved-photo')].filter(image => !image.complete || image.naturalWidth === 0).map(image => image.className)`), [], `${name}: required artwork/QR/saved images loaded`)
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('button')].filter(button => button.getClientRects().length && button.getBoundingClientRect().height < 43).map(button => button.textContent.trim())`), [], `${name}: visible buttons have touch-sized targets`)
@@ -112,6 +133,11 @@ export function createA4Capture({ call, evaluate, directory }) {
         return bad;
       })()`)
       assert.deepEqual(alignment, [], `${name}: route, landmark and click target use the same coordinate system at ${width}px`)
+
+      if (reuse) {
+        checkedStates.set(`${name}-${width}`, { state: name, width, viewportHeight, firstScreenScan, checkedAt: new Date().toISOString() })
+        continue
+      }
 
       const metrics = await call('Page.getLayoutMetrics')
       const size = metrics.cssContentSize
@@ -134,7 +160,13 @@ export function createA4Capture({ call, evaluate, directory }) {
       if (previous !== -1) records.splice(previous, 1)
       records.push({ state: name, width, height: Math.ceil(size.height), file: filename, mapFile, viewportFile, viewportHeight, firstScreenScan, capturedAt: new Date().toISOString(), mapAlignmentErrors: alignment })
     }
-    const version = await versionPromise
+    if (reuse) {
+      await fs.writeFile(path.join(directory, 'a4-regression.json'), JSON.stringify({
+        environment: 'Actual Chrome + isolated MySQL; WeChat simulated; no new A4 screenshots or real-device claim',
+        version, reusedVisualEvidence: reuse, checkedStates: [...checkedStates.values()]
+      }, null, 2))
+      return
+    }
     await fs.writeFile(path.join(directory, 'a4-screenshots.json'), JSON.stringify({
       environment: 'Chrome + isolated MySQL; WeChat SDK/network/fault injection simulated; not real-device acceptance',
       version,
