@@ -197,8 +197,8 @@ A6.3：tmp/point-qrs-cq-fsxinhuo-cn/ 含 10 张 PNG/SVG、manifest、UTF-8 CSV�
 微信/纸样：实际公众号能力、后台域名/校验文件/出口白名单、运行凭据、菜单、iOS/Android 两类扫码入口、现场照片/领取和约5cm真实纸样尚未验证。当前官方 OAuth/JS-SDK 正文已读取，协议说明不等于账号配置成功；生产 MySQL/Cookie/照片目录和反代仍未实测。
 印刷状态：正式地址已定，待真机/纸样试扫，不可直接批量印刷。文件和自动解码完成不代替真机/纸样；无用户批量印刷批准。
 历史构建：源码 ca5f5b7f08bcaf1133bc162a05a60307747ec379；run 35587927134 / attempt 1；镜像标签 changqi-checkin-h5:ca5f5b7f08bc-35587927134-1；linux/amd64 测试平台，platformVerified=false；当时 artifact 上传额度失败。当前额度未知，未删其他项目产物、未调整付费或忽略上传错误。
-A6.1 本轮：Dockerfile 加入一次性建表所需 schema/脚本，固定 Node 24.21.0 amd64 基础镜像 digest；Actions 平台按服务器实测改为 linux/amd64、platformVerified=true，增加临时 MySQL 的真实镜像启动冒烟、镜像内 Node/npm 版本记录和归档 SHA-256。Windows `npm run check` 41/41、`npm run build`、`git diff --check` 通过；run `35742761304` / attempt 1 在源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc` 上构建/冒烟/导出通过，镜像标签 `changqi-checkin-h5:df4f3edf5698-35742761304-1`；Upload artifact 因 GitHub 配额失败，未取得可下载包。
-下一步：等待 GitHub artifact 配额恢复或由用户提供明确的替代中转授权；不重复触发同一构建、不删除其他产物。产物可下载后，还需取得明确生产变更范围，决定是否在现有 1GB 服务器安装 Docker、选择未占用回环端口、创建本项目目录/库/账号、配置 Nginx 并部署；不能复用现有 3000/3001 或默认站点。之后由用户操作 iOS/Android 微信及真实纸样。
+A6.1 本轮：Dockerfile 加入一次性建表所需 schema/脚本，固定 Node 24.21.0 amd64 基础镜像 digest；Actions 平台按服务器实测改为 linux/amd64、platformVerified=true，增加临时 MySQL 的真实镜像启动冒烟、镜像内 Node/npm 版本记录和归档 SHA-256。Windows `npm run check` 41/41、`npm run build`、`git diff --check` 通过；run `35742761304` / attempt 1 在源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc` 上构建/冒烟/导出通过，镜像标签 `changqi-checkin-h5:df4f3edf5698-35742761304-1`；Upload artifact 因 GitHub 配额失败，未取得可下载包。随后按用户授权删除 `Jonoka/formelo-works-website` 的 4 个未过期截图 artifact（约 28.7 MB），删除后该仓库未过期 artifact 为 0；GitHub 配额重新计算尚未验证。
+下一步：等待 GitHub artifact 配额重新计算或由用户提供明确的替代中转授权；不重复触发同一构建、不删除其他产物。产物可下载后，还需取得明确生产变更范围，决定是否在现有 1GB 服务器安装 Docker、选择未占用回环端口、创建本项目目录/库/账号、配置 Nginx 并部署；不能复用现有 3000/3001 或默认站点。之后由用户操作 iOS/Android 微信及真实纸样。
 本轮未执行：服务器安装/生产部署/测试写入、DNS/证书/公众号/菜单/托管修改、artifact 下载、Docker load、Compose 更新。二维码已生成交付待验证样张，不依赖 Actions artifact。
 ```
 
