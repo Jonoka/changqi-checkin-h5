@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 // Reuses the existing installed-Chrome CDP check; no second browser test framework.
-export async function checkA2Browser({ call, evaluate, click, waitFor, ready, cookie, otherCookie, samplePath, pngPath, badPath, directory, origin, totalCount, checkBrowserSaved }) {
+export async function checkA2Browser({ call, evaluate, click, waitFor, ready, cookie, otherCookie, samplePath, pngPath, badPath, directory, origin, totalCount, checkBrowserSaved, capture = async () => {} }) {
   const setCookie = (value) => call('Network.setCookie', { name: 'changqi.sid', value: value.slice('changqi.sid='.length), url: origin, httpOnly: true, sameSite: 'Lax' })
   const chooseFile = async (filename) => {
     const document = await call('DOM.getDocument')
@@ -28,6 +28,7 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   await scan('p01')
   await chooseFile(samplePath)
   await waitFor('document.querySelector(".local-preview")?.naturalWidth > 0', 'real selected photograph preview')
+  await capture('photo-preview')
   await chooseFile(pngPath)
   await waitFor('document.body.textContent.includes("second.png")', 'reselect another native file')
   await chooseFile(samplePath)
@@ -55,6 +56,7 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   assert.equal(await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "提交现场照片").disabled'), true)
   assert.equal(await progress(), `0/${totalCount}`)
   assert.equal(await evaluate('document.body.textContent.includes("照片保存成功")'), false)
+  await capture('photo-unknown')
   await evaluate('window.fetch = window.__a2OriginalFetch')
   await click('核对保存结果')
   await waitFor('document.body.textContent.includes("服务器尚无该地点记录")', 'confirmed unsaved result')
@@ -71,16 +73,19 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   await waitFor('window.__a2Release', 'real upload saved but response held')
   assert.equal(await evaluate('document.querySelector("input[type=file]").disabled'), true)
   assert.equal(await progress(), `0/${totalCount}`, 'No optimistic progress before acknowledged save')
+  await capture('photo-saving')
   await click('正在保存…')
   assert.equal(await evaluate('window.__a2Uploads'), 1)
   await evaluate('window.__a2Release(); window.fetch = window.__a2OriginalFetch')
   await waitFor('document.querySelector(".saved-photo")?.naturalWidth > 0', 'saved private photograph')
   assert.equal(await progress(), `1/${totalCount}`)
   await checkBrowserSaved(['p01'])
+  await capture('photo-success')
   assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false)
 
   await scan('p02'); await chooseFile(badPath); await click('提交现场照片')
   await waitFor('document.body.textContent.includes("照片无法解码")', 'unsupported file feedback')
+  await capture('photo-error')
   assert.equal(await progress(), `1/${totalCount}`)
   await chooseFile(pngPath)
   // Simulate a lost response AFTER a real SQL/file save, not a fake successful upload.

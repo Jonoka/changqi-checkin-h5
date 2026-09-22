@@ -49,7 +49,7 @@ onUnmounted(() => { alive = false; emit('busy', false) })
 </script>
 
 <template>
-  <div class="claim-action">
+  <div class="claim-action" :data-phase="phase" :aria-busy="busy">
     <p v-if="state.claimedAt" class="claimed-status" role="status">已领取 · 首次确认时间：{{ state.claimedAt }}</p>
     <template v-else>
       <p v-if="!state.allCompleted">尚未完成全部地点，暂不能领取礼品。</p>
@@ -62,6 +62,6 @@ onUnmounted(() => { alive = false; emit('busy', false) })
       </section>
       <button v-if="phase === 'unknown'" type="button" class="secondary" @click="verify">核对领取结果</button>
     </template>
-    <p v-if="message" class="notice" role="status">{{ message }}</p>
+    <p v-if="message" class="notice" :class="{ 'error-notice': ['error','unknown'].includes(phase), 'success-notice': phase === 'success' }" role="status">{{ message }}</p>
   </div>
 </template>

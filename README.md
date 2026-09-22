@@ -53,6 +53,12 @@ npm start
 
 `/stats` 只显示已标记领取人数、查询时间和刷新按钮；数据库失败显示错误，不显示假 0。领取码由本地依赖从本人 `claimUrl` 生成，不发送给第三方二维码服务；二维码与链接仅向派发人员出示。开发演示必须使用独立测试库，不能将模拟领取记录混入生产统计。
 
+### 页面与本地插画
+
+首页/示意地图、照片上传与成功、领取/派发沿用同一 Vue 页面和已有接口；地图节点只查看，不提供扫码资格。引导、授权错误与人数页使用服务端同风格模板，构建前仍可返回文字和错误状态。页面不依赖外部字体服务。
+
+`web/public/art/` 两张 WebP 仅从已认可原图的无文字村落区域裁取；原图未覆盖。需要复现时运行 `node scripts/prepare-a4-art.mjs`：先校验源图 SHA，已有不同内容的目标文件会拒绝覆盖。它不是正式二维码生成脚本；插画、路线不是实景测绘。Vite 在开发和构建后均从 `/art/` 提供这些静态资源。
+
 ### 轻量验证
 
 `npm run check` 保留配置/HTTP 冒烟并运行 Node 内置测试；其中微信网络与 SDK 回调为明确模拟。`npm run build` 只构建前端，不请求 Actions 镜像打包。
@@ -68,6 +74,8 @@ $env:TEST_DB_PASSWORD = '<仅在本地填写>'
 $env:TEST_BROWSER_EXECUTABLE = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
 npm run test:a1:mysql
 ```
+
+A4 执行 `npm run test:a4:mysql`，复用相同隔离 MySQL/Chrome 并包含 A1–A3 回归。设置已有 `TEST_BROWSER_EXECUTABLE` 后，额外检查指针地图查看、动态地点数量、触控尺寸、图片加载和页面错误/关闭状态，生成 `tmp/changqi_a1_test_*/a4-screenshots.json` 及 390/430px PNG；这些是本地测试截图，不是微信真机结果。未配置浏览器时仍明确 SKIP，不算 A4 画面通过。
 
 A3 使用同一测试入口执行 `npm run test:a3:mysql`，包含 A1/A2 回归、两路领取、并发与固定凭据统计检查。仍须显式设置前述 `TEST_DB_*` 和 `TEST_BROWSER_EXECUTABLE`；不新增测试平台，不触发 Actions 镜像打包。
 

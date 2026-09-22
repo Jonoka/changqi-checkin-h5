@@ -23,8 +23,10 @@ onUnmounted(() => { attempt++ })
 </script>
 
 <template>
-  <section class="claim-panel" aria-label="礼品领取">
-    <h2>礼品领取</h2>
+  <section class="claim-panel" :class="{ 'claim-locked': !me.allCompleted }" aria-label="礼品领取">
+    <span v-if="me.allCompleted" class="celebration-symbol" aria-hidden="true">{{ me.claimedAt ? '✓' : '✦' }}</span>
+    <p v-if="me.allCompleted" class="eyebrow">{{ me.claimedAt ? '把长岐的美好带回家' : '漫游印记已集齐' }}</p>
+    <h2>{{ me.claimedAt ? '感谢你，与长岐相遇' : me.allCompleted ? '领取你的漫游纪念' : '集齐印记，领取现场礼品' }}</h2>
     <template v-if="me.allCompleted && !me.claimedAt">
       <p>{{ activity.claimLocationText }}</p>
       <p>出示本人领取二维码，或在实际拿到礼品后自行确认。仅打开凭证不会标记领取。</p>

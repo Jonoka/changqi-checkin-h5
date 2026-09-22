@@ -4,10 +4,11 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
+import { createA4Capture, pointerClick } from './check-a4-browser.mjs'
 
 // Optional lightweight check with an already installed Chromium browser; no test framework/dependency.
 // Native WeChat SDK callbacks below are explicitly SIMULATED. SQL/HTTP/Vue rendering remain real.
-export async function checkA1Browser({ executable, directory, origin, cookie, totalCount, afterView, afterScan, afterA1 }) {
+export async function checkA1Browser({ executable, directory, origin, cookie, totalCount, afterView, afterScan, afterA1, visual = false }) {
   const expectedProgress = `0/${totalCount}`
   const profile = path.join(directory, 'browser-profile')
   await fs.mkdir(profile, { recursive: true })
@@ -36,6 +37,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     throw new Error(`Browser state did not recover: ${label}`)
   }
   const click = (label) => evaluate(`${buttonExpression(label)}.click()`)
+  const capture = visual ? createA4Capture({ call, evaluate, directory }) : async () => {}
   const ready = () => waitFor(`${buttonExpression('扫一扫打卡')} && !${buttonExpression('扫一扫打卡')}.disabled`, 'scan ready')
   try {
     let portData
@@ -78,6 +80,17 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await ready()
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     assert.match(await evaluate('document.body.textContent'), /模拟微信 SDK/)
+    await capture('home')
+    if (visual) {
+      await pointerClick({ call, evaluate }, '.map-point[aria-label^="查看卢氏大宗祠"]')
+      await waitFor('document.querySelector(".point-detail")', 'pointer map navigation')
+      await waitFor('document.activeElement === document.querySelector(".point-heading h2")', 'route heading receives focus')
+      assert.equal(await evaluate('document.activeElement.getBoundingClientRect().top < innerHeight'), true)
+      await afterView()
+      assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false)
+      await click('返回地点列表')
+      await waitFor('document.querySelector(".map-point")', 'return to schematic map')
+    }
     for (const width of [390, 430]) {
       await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
       assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `No horizontal overflow at ${width}px`)
@@ -88,6 +101,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     assert.match(await evaluate('document.body.textContent'), /仅查看地点/)
     assert.match(await evaluate('document.body.textContent'), /请先使用页面内扫一扫/)
     assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false, 'Viewing a point must not enable upload')
+    await capture('point-view')
 
     for (const outcome of ['cancel', 'fail']) {
       await click('扫一扫打卡')
@@ -108,6 +122,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     assert.match(await evaluate('document.body.textContent'), /已识别当前扫码地点/)
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     assert.equal(new URL(await evaluate('location.href')).origin, origin)
+    await capture('scan-ready')
 
     await click('扫一扫打卡')
     await evaluate("window.dispatchEvent(new Event('pageshow'))")
@@ -121,7 +136,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     await afterScan()
 
-    if (afterA1) await afterA1({ call, evaluate, click, waitFor, buttonExpression, ready })
+    if (afterA1) await afterA1({ call, evaluate, click, waitFor, buttonExpression, ready, capture })
 
     await call('Network.clearBrowserCookies')
     await call('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 HeadlessChrome A1-NORMAL-BROWSER-TEST' })

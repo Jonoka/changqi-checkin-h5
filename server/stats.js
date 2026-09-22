@@ -1,5 +1,5 @@
 import basicAuth from 'express-basic-auth'
-import { escapeHtml, sendPage } from './http.js'
+import { escapeHtml, sendPage, pageShell } from './http.js'
 import { chinaTime } from './identity.js'
 
 export function mountStats(app, { pool, runtime }) {
@@ -33,5 +33,6 @@ export function mountStats(app, { pool, runtime }) {
 }
 
 function page(value, queriedAt, demo) {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>已标记领取人数</title><style>body{font-family:system-ui,sans-serif;background:#f7f1df;color:#183d2b;margin:0}main{max-width:32rem;margin:8vh auto;padding:24px;line-height:1.8}strong{font-size:2rem}button{padding:12px;font:inherit}</style></head><body><main>${demo ? '<p>开发演示 · 测试记录，非现场派发结果</p>' : ''}<h1>已标记领取人数</h1>${queriedAt ? `<strong data-stats-count>${escapeHtml(value)}</strong><p>查询时间：<time>${escapeHtml(queriedAt)}</time></p>` : `<p role="alert">${escapeHtml(value)}</p>`}<form action="/stats" method="get"><button type="submit">刷新人数</button></form><p>统计已标记领取的身份数，不是点击次数，也不代表独立核验的实物派发量。</p></main></body></html>`
+  const content = `<section class="paper"><p class="eyebrow">本次活动 · 只读查询</p>${queriedAt ? `<strong class="stats-number" data-stats-count>${escapeHtml(value)}</strong><p>查询时间：<time>${escapeHtml(queriedAt)}</time></p>` : `<p role="alert">${escapeHtml(value)}</p>`}<form action="/stats" method="get"><button type="submit">刷新人数</button></form></section><p class="footnote">统计已标记领取的身份数，不是点击次数，也不代表独立核验的实物派发量。</p>`
+  return pageShell({ title: '已标记领取人数', content, demo })
 }

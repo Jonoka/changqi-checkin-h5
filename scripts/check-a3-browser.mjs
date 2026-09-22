@@ -4,7 +4,7 @@ import path from 'node:path'
 
 // Reuse the existing Chrome connection. WeChat stays simulated; claims/COUNT use real MySQL.
 export async function checkA3Browser({ call, evaluate, click, waitFor, ready, buttonExpression, origin, directory,
-  selfCookie, staffCookie, incompleteCookie, selfUrl, staffUrl, credential, assertUiClaim, countClaimed }) {
+  selfCookie, staffCookie, incompleteCookie, selfUrl, staffUrl, credential, assertUiClaim, countClaimed, capture = async () => {} }) {
   const setCookie = (cookie) => call('Network.setCookie', { name: 'changqi.sid', value: cookie.slice('changqi.sid='.length), url: origin, httpOnly: true, sameSite: 'Lax' })
   const claimed = () => waitFor('document.querySelector(".claimed-status")', 'server-confirmed claim display')
   const locked = (label) => evaluate(`${buttonExpression(label)}.disabled`)
@@ -22,7 +22,9 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   assert.equal(await evaluate('document.querySelector(".claim-qr").src'), firstQr)
   await assertUiClaim('self', false)
 
+  await capture('claim-ready')
   await click('我已领取礼品')
+  await capture('claim-confirm')
   await waitFor('document.querySelector("[role=dialog]")', 'self second confirmation')
   assert.match(await evaluate('document.querySelector("[role=dialog]").textContent'), /实际拿到礼品/)
   await click('取消')
@@ -42,6 +44,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   await waitFor('document.body.textContent.includes("仍无法确认领取结果")', 'second verification failure')
   assert.equal(await locked('我已领取礼品'), true)
   assert.equal(await evaluate('Boolean(document.querySelector(".claimed-status"))'), false)
+  await capture('claim-unknown')
   await assertUiClaim('self', false)
   await evaluate('window.fetch = window.__a3Fetch')
   await click('核对领取结果')
@@ -63,6 +66,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   assert.equal(await evaluate('window.__a3Writes'), 1)
   await evaluate('window.__a3Release(); window.fetch = window.__a3Fetch')
   await claimed(); await assertUiClaim('self', true)
+  await capture('claim-complete')
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr"))'), false)
   const firstTime = await evaluate('document.querySelector(".claimed-status").textContent')
   await call('Page.reload'); await claimed()
@@ -79,6 +83,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   assert.equal(await evaluate('location.pathname'), new URL(staffUrl).pathname)
   await assertUiClaim('staff', false)
   await click('已完成奖品派发'); await click('取消')
+  await capture('staff-ready')
   await assertUiClaim('staff', false)
   await evaluate(`window.__a3Fetch = window.fetch;
     window.fetch = async (...args) => {
@@ -93,6 +98,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   await assertUiClaim('staff', true)
   assert.equal(await countClaimed(), before + 2)
   await click('刷新领取状态'); await claimed()
+  await capture('staff-complete')
   for (const width of [390, 430]) {
     await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
     assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true)
@@ -108,6 +114,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   await claimed()
   await call('Page.navigate', { url: `${origin}/r/invalid` })
   await waitFor('document.body.textContent.includes("领取凭证不存在")', 'invalid bearer link')
+  await capture('staff-invalid')
   assert.equal(await evaluate(`Boolean(${buttonExpression('已完成奖品派发')})`), false)
 
   await call('Network.setExtraHTTPHeaders', { headers: { Authorization: credential } })

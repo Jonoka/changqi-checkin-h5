@@ -34,7 +34,9 @@ onUnmounted(() => { alive = false; window.removeEventListener('pageshow', restor
 <template>
   <main class="page-shell">
     <section class="activity-card staff-claim">
+      <p class="brand-line"><span class="brand-seal" aria-hidden="true">岐</span>长岐漫游手记<span class="brand-note">现场礼品领取</span></p>
       <h1>礼品派发确认</h1>
+      <img class="staff-illustration" src="/art/lane.webp" alt="" aria-hidden="true" width="640" height="265" />
       <p v-if="activity?.developmentDemo" class="notice">开发演示 · 非真实现场派发</p>
       <p>仅查看或扫描本页不会标记领取。请在实际交付礼品后确认，不要重复派发。</p>
       <p v-if="loading" role="status">正在读取领取凭证…</p>
@@ -48,6 +50,7 @@ onUnmounted(() => { alive = false; window.removeEventListener('pageshow', restor
           @state="adopt" @busy="setBusy" />
       </template>
       <button type="button" class="secondary" :disabled="busy || loading" @click="refresh">刷新领取状态</button>
+      <footer class="page-footer">仅确认一次，保留首次领取记录<span>此页不展示游客照片，无需员工账号</span></footer>
     </section>
   </main>
 </template>

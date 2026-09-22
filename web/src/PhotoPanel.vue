@@ -130,8 +130,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="photo-panel">
-    <p>照片用于本次活动打卡记录，不公开展示。</p>
+  <div class="photo-panel" :data-phase="phase" :aria-busy="busy">
+    <div v-if="phase === 'success' && completed" class="success-card" role="status"><span class="success-mark" aria-hidden="true">✓</span><div><h3>打卡成功</h3><p>{{ point.name }}的风景，已收进你的手记。</p><p>漫游进度 {{ me.completedCount }}/{{ me.totalCount }}<span v-if="me.allCompleted"> · 已完成全部地点，可查看领取凭证</span></p></div></div>
+    <p class="privacy-note">照片用于本次活动打卡记录，不公开展示。</p>
     <template v-if="completed">
       <p>已保存本人现场照片；本期不提供修改、删除或补传。</p>
       <p v-if="photoLoading" role="status">正在读取本人照片…</p>
@@ -142,14 +143,14 @@ onUnmounted(() => {
     <template v-else-if="!enabled"><p>活动暂未开放或已结束，不能上传新照片。</p></template>
     <template v-else-if="!scanned"><p>请先使用页面内扫一扫识别该地点。刷新后尚未提交的照片需要重新选择；扫码信息未恢复时请重新扫码。</p></template>
     <template v-else>
-      <label :for="`photo-${point.key}`">选择现场照片（可拍照或从相册选择）</label>
+      <label class="upload-label" :for="`photo-${point.key}`"><span class="camera-mark" aria-hidden="true">＋</span><strong>选择现场照片（可拍照或从相册选择）</strong></label>
       <input :id="`photo-${point.key}`" ref="input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" :disabled="busy || phase === 'unknown'" @change="choose" />
-      <p>仅一张 JPEG / PNG / WebP，最大 15 MiB。不支持的格式请重新拍照或转换为 JPG/PNG。提交前可重选，刷新会丢失未提交的选择。</p>
+      <p class="upload-hint">仅一张 JPEG / PNG / WebP，最大 15 MiB。不支持的格式请重新拍照或转换为 JPG/PNG。提交前可重选，刷新会丢失未提交的选择。</p>
       <img v-if="preview" class="photo-preview local-preview" :src="preview" alt="待提交的现场照片预览" @error="message = '当前照片无法预览，请重新拍照或转换为 JPG/PNG'" />
       <p v-if="file">已选择：{{ file.name }}</p>
       <button type="button" :disabled="!file || busy || phase === 'unknown'" @click="submit">{{ busy ? '正在保存…' : '提交现场照片' }}</button>
       <button v-if="phase === 'unknown'" type="button" class="secondary" @click="verify">核对保存结果</button>
     </template>
-    <p v-if="message" class="notice" role="status">{{ message }}</p>
+    <p v-if="message" class="notice" :class="{ 'error-notice': ['error','unknown'].includes(phase), 'success-notice': phase === 'success' }" role="status">{{ message }}</p>
   </div>
 </template>

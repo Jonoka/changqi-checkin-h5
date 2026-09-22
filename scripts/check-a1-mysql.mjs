@@ -20,7 +20,9 @@ import { checkA2Mysql, checkA2Restart } from './check-a2-mysql.mjs'
 import { checkA2Browser } from './check-a2-browser.mjs'
 import { checkA3Mysql, checkA3Restart } from './check-a3-mysql.mjs'
 import { checkA3Browser } from './check-a3-browser.mjs'
-const includeA3 = process.argv.includes('--a3')
+import { checkA4Pages } from './check-a4-browser.mjs'
+const includeA4 = process.argv.includes('--a4')
+const includeA3 = process.argv.includes('--a3') || includeA4
 const includeA2 = process.argv.includes('--a2') || includeA3
 
 // Intentionally no DB_* fallback: only an explicitly selected local test instance is allowed.
@@ -403,7 +405,7 @@ try {
   if (process.env.TEST_BROWSER_EXECUTABLE) {
     const rowsBeforeBrowser = await count('checkins')
     await checkA1Browser({
-      executable: process.env.TEST_BROWSER_EXECUTABLE, directory: tempDirectory,
+      executable: process.env.TEST_BROWSER_EXECUTABLE, directory: tempDirectory, visual: includeA4,
       origin: 'http://localhost:5173', cookie: proxied.cookie, totalCount: activity.points.length,
       afterView: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p01'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
       afterScan: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p02'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
@@ -411,6 +413,11 @@ try {
         await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length })
         ok('A2 actual Chrome file selection/preview/reselect/upload, unknown-result retry lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)')
         if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory }); ok('A3 actual Chrome: QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
+        if (includeA4) {
+          await checkA4Pages({ ...tools, origin: 'http://localhost:5173', cookie: proxied.cookie, credential: a3.credential, activity })
+          ok('A4 actual Chrome: pointer map view without scan eligibility, dynamic map/list/N, 390/430px state screenshots, 320px/reduced motion, guide/errors/closure/stats; real SQL with simulated WeChat/network faults')
+          console.log(`A4 screenshot evidence: ${path.relative(process.cwd(), tempDirectory)}/a4-screenshots.json`)
+        }
       } : null
     })
     ok('ACTUAL Chromium/Vue page: real MySQL identity and unchanged progress, map-only view, SDK cancel/fail/retry/resume, reload and ordinary-browser hint; SDK SIMULATED; 390/430px no overflow')
@@ -425,7 +432,7 @@ try {
     await checkA2Restart({ start: startRealProcess, stop: stopRealProcess, browser, directory: tempDirectory, pool, ok })
   }
   if (includeA3) await checkA3Restart({ start: startRealProcess, stop: stopRealProcess, browser, pool, activity, directory: tempDirectory, ok })
-  console.log(`${includeA3 ? 'A1+A2+A3' : includeA2 ? 'A1+A2' : 'A1'} MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
+  console.log(`${includeA4 ? 'A1+A2+A3+A4' : includeA3 ? 'A1+A2+A3' : includeA2 ? 'A1+A2' : 'A1'} MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
 } finally {
   activity.enabled = initialEnabled
   if (vite) await vite.close()
