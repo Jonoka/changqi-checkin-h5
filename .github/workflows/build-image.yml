@@ -14,9 +14,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Test-only default until the target server's uname -m is measured.
+      # The target server was read-only verified as x86_64 on 2026-09-22.
       IMAGE_PLATFORM: linux/amd64
-      PLATFORM_VERIFIED: false
+      PLATFORM_VERIFIED: true
+      BASE_IMAGE_DIGEST: sha256:5cbc7caba8c2c0f0bca675d1b61b9f2857e1cf1853c6164ee9dd409501a936e7
     steps:
       - name: Check out the requested commit
         uses: actions/checkout@v4
@@ -54,13 +55,111 @@ jobs:
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: docker buildx build --platform "$IMAGE_PLATFORM" --tag "$IMAGE_TAG" --load .
 
+      - name: Smoke test built image with temporary MySQL
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          network="changqi-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          db="changqi-smoke-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          app="changqi-smoke-app-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() {
+            docker rm -f "$app" "$db" >/dev/null 2>&1 || true
+            docker network rm "$network" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker network create "$network"
+          docker run --detach --name "$db" --network "$network" \
+            --env MYSQL_DATABASE=changqi_smoke \
+            --env MYSQL_USER=smoke_user \
+            --env MYSQL_PASSWORD=smoke_password \
+            --env MYSQL_ROOT_PASSWORD=smoke_root_password \
+            mysql:8.4
+
+          for attempt in $(seq 1 60); do
+            if docker exec "$db" mysqladmin ping -h 127.0.0.1 -usmoke_user -psmoke_password --silent; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs "$db"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker run --rm --network "$network" \
+            --env NODE_ENV=production \
+            --env DEV_MOCK_ENABLED=false \
+            --env PUBLIC_ORIGIN=https://example.test \
+            --env DB_HOST="$db" --env DB_PORT=3306 --env DB_NAME=changqi_smoke \
+            --env DB_USER=smoke_user --env DB_PASSWORD=smoke_password \
+            --env SESSION_SECRET=smoke-session-secret-012345678901234567890123 \
+            --env WECHAT_APP_ID=smoke-app --env WECHAT_APP_SECRET=smoke-secret \
+            --env UPLOAD_DIR=/var/lib/changqi/uploads \
+            "$IMAGE_TAG" npm run db:schema
+
+          docker run --detach --name "$app" --network "$network" \
+            --publish 127.0.0.1:18080:3000 \
+            --env NODE_ENV=production --env DEV_MOCK_ENABLED=false \
+            --env PUBLIC_ORIGIN=https://example.test --env PORT=3000 \
+            --env DB_HOST="$db" --env DB_PORT=3306 --env DB_NAME=changqi_smoke \
+            --env DB_USER=smoke_user --env DB_PASSWORD=smoke_password \
+            --env SESSION_SECRET=smoke-session-secret-012345678901234567890123 \
+            --env WECHAT_APP_ID=smoke-app --env WECHAT_APP_SECRET=smoke-secret \
+            --env UPLOAD_DIR=/var/lib/changqi/uploads \
+            "$IMAGE_TAG"
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/health | grep -q '"database":"connected"'; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs "$app"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:18080/api/activity | grep -q '长岐村漫游打卡'
+          curl --fail --silent --show-error http://127.0.0.1:18080/ | grep -q '<!doctype html>'
+          curl --fail --silent --show-error http://127.0.0.1:18080/q/p01 | grep -q '参与方式'
+          status="$(curl --silent --show-error --output /tmp/changqi-invalid-claim.html --write-out '%{http_code}' http://127.0.0.1:18080/r/not-a-claim)"
+          test "$status" = 404
+
+          if docker run --rm --network "$network" \
+            --env NODE_ENV=production --env DEV_MOCK_ENABLED=true \
+            --env PUBLIC_ORIGIN=https://example.test \
+            --env SESSION_SECRET=smoke-session-secret-012345678901234567890123 \
+            --env WECHAT_APP_ID=smoke-app --env WECHAT_APP_SECRET=smoke-secret \
+            --env UPLOAD_DIR=/var/lib/changqi/uploads \
+            "$IMAGE_TAG" node --input-type=module -e "import { runtimeConfig } from './server/runtime.js'; try { runtimeConfig(process.env); process.exit(1) } catch (error) { if (!/allowed only/.test(error.message)) { console.error(error); process.exit(2) } }"; then
+            :
+          else
+            echo 'production mock configuration was accepted or failed for the wrong reason'
+            exit 1
+          fi
+
+          echo "image smoke test passed: $IMAGE_TAG"
+
+      - name: Record image runtime versions
+        id: runtime
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          echo "node_version=$(docker run --rm "$IMAGE_TAG" node --version)" >> "$GITHUB_OUTPUT"
+          echo "npm_version=$(docker run --rm "$IMAGE_TAG" npm --version)" >> "$GITHUB_OUTPUT"
+
       - name: Export image and metadata
         env:
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
           ARTIFACT_NAME: ${{ steps.meta.outputs.artifact_name }}
+          NODE_VERSION: ${{ steps.runtime.outputs.node_version }}
+          NPM_VERSION: ${{ steps.runtime.outputs.npm_version }}
         run: |
           mkdir -p release
           docker save "$IMAGE_TAG" | gzip > "release/${ARTIFACT_NAME}.tar.gz"
+          sha256sum "release/${ARTIFACT_NAME}.tar.gz" > "release/${ARTIFACT_NAME}.tar.gz.sha256"
           cp compose.yaml release/compose.yaml
           node --input-type=module -e '
             import { writeFileSync } from "node:fs";
@@ -70,6 +169,10 @@ jobs:
               runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
               platform: process.env.IMAGE_PLATFORM,
               platformVerified: process.env.PLATFORM_VERIFIED === "true",
+              baseImage: `node:24-bookworm-slim@${process.env.BASE_IMAGE_DIGEST}`,
+              baseImageDigest: process.env.BASE_IMAGE_DIGEST,
+              nodeVersion: process.env.NODE_VERSION,
+              npmVersion: process.env.NPM_VERSION,
               imageTag: process.env.IMAGE_TAG,
               builtAt: new Date().toISOString()
             }, null, 2) + "\n");
