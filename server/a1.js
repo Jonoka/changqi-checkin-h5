@@ -10,7 +10,10 @@ export function mountGuide(app, activity, runtime) {
     if (!point) return sendPage(response, { status: 404, title: '地点不存在', code: 'INVALID_POINT', message: '地点不存在，请扫描现场活动二维码', demo: runtime.mockEnabled })
     return sendPage(response, {
       title: `${point.name} · 公众号入口引导`, demo: runtime.mockEnabled, guide: true,
-      message: `请先关注“${activity.wechat.officialAccountName}”公众号，从底部菜单进入“${activity.activityName}”，再使用活动页面内的扫一扫完成打卡。已关注用户请直接从菜单进入。\n${activity.wechat.guideText}\n打开本页不会记录打卡，也不会取得扫码资格。`
+      message: activity.wechat.guideText,
+      officialAccountName: activity.wechat.officialAccountName,
+      officialAccountQr: activity.wechat.officialAccountQr,
+      activityName: activity.activityName
     })
   })
 }

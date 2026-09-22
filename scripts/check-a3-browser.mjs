@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import QRCode from 'qrcode'
+import sharp from 'sharp'
 
 // Reuse the existing Chrome connection. WeChat stays simulated; claims/COUNT use real MySQL.
 export async function checkA3Browser({ call, evaluate, click, waitFor, ready, buttonExpression, origin, directory,
@@ -14,9 +16,20 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr"))'), false)
   assert.equal(await evaluate(`Boolean(${buttonExpression('我已领取礼品')})`), false)
   await setCookie(selfCookie); await call('Page.navigate', { url: origin }); await ready()
-  await waitFor('document.querySelector(".claim-qr")?.naturalWidth > 0', 'real generated claimant QR')
-  assert.equal(await evaluate('document.querySelector(".claim-panel a").href'), selfUrl)
+  await waitFor(buttonExpression('查看领取凭证'), 'owner voucher entry after all points complete')
+  assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr, .claim-panel"))'), false, 'home keeps the full voucher collapsed')
+  await capture('all-completed')
+  await click('查看领取凭证')
+  await waitFor('location.hash === "#claim" && document.querySelector(".claim-qr")?.naturalWidth > 0', 'real generated claimant QR')
+  assert.equal(await evaluate('location.pathname'), '/')
+  assert.equal(await evaluate(`Boolean(document.querySelector('.claim-panel a[href*="/r/"]'))`), false, 'owner view never links into staff dispatch')
+  const browserClaimUrl = await evaluate(`fetch('/api/me').then(response => response.json()).then(payload => payload.data.claimUrl)`)
+  assert.equal(browserClaimUrl, selfUrl, 'owner state exposes only its canonical staff claim URL')
   const firstQr = await evaluate('document.querySelector(".claim-qr").src')
+  const expectedQr = await QRCode.toDataURL(selfUrl, { errorCorrectionLevel: 'M', margin: 4, width: 280 })
+  const actualPixels = await sharp(Buffer.from(firstQr.split(',')[1], 'base64')).ensureAlpha().raw().toBuffer()
+  const expectedPixels = await sharp(Buffer.from(expectedQr.split(',')[1], 'base64')).ensureAlpha().raw().toBuffer()
+  assert.deepEqual(actualPixels, expectedPixels, 'owner QR pixels encode the canonical staff claim URL')
   await click('刷新本人状态')
   await waitFor('document.querySelector(".claim-qr")?.naturalWidth > 0', 'same claim QR after refresh')
   assert.equal(await evaluate('document.querySelector(".claim-qr").src'), firstQr)
@@ -99,7 +112,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   assert.equal(await countClaimed(), before + 2)
   await click('刷新领取状态'); await claimed()
   await capture('staff-complete')
-  for (const width of [390, 430]) {
+  for (const width of [320, 390, 430]) {
     await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
     assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true)
     const image = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })

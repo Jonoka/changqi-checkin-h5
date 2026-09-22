@@ -1,24 +1,36 @@
 <script setup>
-defineProps({ points: Array, completedKeys: { type: Array, default: () => [] }, loggedIn: Boolean, disabled: Boolean })
+import { computed } from 'vue'
+import PointArt from './PointArt.vue'
+import { villageMapLayout } from './map-layout.js'
+const props = defineProps({ points: { type: Array, required: true }, completedKeys: { type: Array, default: () => [] }, loggedIn: Boolean, disabled: Boolean })
 const emit = defineEmits(['view'])
+const layout = computed(() => villageMapLayout(props.points))
+const status = point => !props.loggedIn ? '查看地点' : props.completedKeys.includes(point.key) ? '已完成' : '待打卡'
 </script>
 
 <template>
   <section class="village-map" aria-labelledby="map-title">
     <div class="section-heading"><div><p class="eyebrow">沿着风景，慢慢走</p><h2 id="map-title" tabindex="-1">长岐漫游地图</h2></div><span class="paper-tag">游览示意</span></div>
-    <p class="map-caption">地点不分先后 · 图示不作实际导航</p>
-    <div class="map-canvas">
-      <img class="map-scenery" src="/art/village.webp" alt="" aria-hidden="true" loading="lazy" width="650" height="310" />
+    <p class="map-caption">不限顺序 · 点击地标查看这一站</p>
+    <div class="map-canvas" :style="{ aspectRatio: `${layout.width} / ${layout.height}` }" :data-placement="layout.placement">
+      <img class="map-scenery" src="/art/map-environment.webp" alt="" aria-hidden="true" width="720" height="1240" decoding="async" />
+      <svg class="map-route" :viewBox="`0 0 ${layout.width} ${layout.height}`" preserveAspectRatio="none" aria-hidden="true">
+        <path class="route-edge" :d="layout.route" />
+        <path class="route-path" :d="layout.route" />
+        <path class="route-dashes" :d="layout.route" />
+      </svg>
       <ol class="map-points">
-        <li v-for="point in points" :key="point.key" :class="{ completed: completedKeys.includes(point.key) }">
-          <button type="button" class="map-point" :disabled="disabled" :aria-label="`查看${point.name}，${!loggedIn ? '登录后查看进度' : completedKeys.includes(point.key) ? '已完成' : '未完成'}`" @click="emit('view', point)">
-            <span class="map-pin" aria-hidden="true">{{ completedKeys.includes(point.key) ? '✓' : point.displayOrder }}</span>
-            <span class="map-label">{{ point.name }}</span>
-            <small>{{ !loggedIn ? '查看地点' : completedKeys.includes(point.key) ? '已完成' : '待打卡' }}</small>
+        <li v-for="node in layout.nodes" :key="node.point.key" :class="{ completed: loggedIn && completedKeys.includes(node.point.key) }"
+          :style="{ left: `${node.x / layout.width * 100}%`, top: `${node.y / layout.height * 100}%` }">
+          <button type="button" class="map-point" :data-point-key="node.point.key" :data-map-x="node.x" :data-map-y="node.y" :disabled="disabled"
+            :aria-label="`查看${node.point.name}，${status(node.point)}`" @click="emit('view', node.point)">
+            <PointArt :point="node.point" variant="landmark" eager />
+            <span class="map-label"><span class="map-pin" aria-hidden="true">{{ node.point.displayOrder }}</span><span>{{ node.point.name }}</span></span>
+            <small class="map-state"><span v-if="loggedIn && completedKeys.includes(node.point.key)" aria-hidden="true">✓ </span>{{ status(node.point) }}</small>
           </button>
         </li>
       </ol>
     </div>
-    <p class="muted map-footnote">地图与列表只用于查看地点。到达后，请用页面内扫一扫识别地点码。</p>
+    <p class="muted map-footnote">插画不是实景。位置以现场指引为准；点击地图不会取得扫码资格。</p>
   </section>
 </template>

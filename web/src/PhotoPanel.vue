@@ -4,7 +4,7 @@ import { api } from './api.js'
 import { uploadWithRecovery } from './photo-upload.js'
 
 const props = defineProps({ point: Object, me: Object, enabled: Boolean, scanned: Boolean, maxBytes: Number })
-const emit = defineEmits(['state', 'busy', 'login-required', 'scan-required'])
+const emit = defineEmits(['state', 'busy', 'locked', 'login-required', 'scan-required', 'continue', 'claim'])
 const file = ref(null)
 const preview = ref('')
 const input = ref(null)
@@ -25,7 +25,7 @@ function clearSelection() {
   if (input.value) input.value.value = ''
 }
 function choose(event) {
-  if (busy.value) return
+  if (busy.value || phase.value === 'unknown') return
   const chosen = event.target.files?.[0]
   if (!chosen) return // Native picker cancellation preserves the previous selection.
   clearSelection()
@@ -119,6 +119,8 @@ async function loadPhoto() {
     }
   } finally { if (alive && attempt === photoAttempt) photoLoading.value = false }
 }
+// Keep the existing recovery state mounted when hash/back navigation is attempted.
+watch(phase, value => emit('locked', value === 'unknown'), { flush: 'sync' })
 watch(completed, (value) => { if (value) clearSelection(); void loadPhoto() }, { immediate: true })
 onUnmounted(() => {
   alive = false
@@ -126,31 +128,41 @@ onUnmounted(() => {
   clearSelection()
   if (photoUrl.value) URL.revokeObjectURL(photoUrl.value)
   emit('busy', false)
+  emit('locked', false)
 })
 </script>
 
 <template>
   <div class="photo-panel" :data-phase="phase" :aria-busy="busy">
-    <div v-if="phase === 'success' && completed" class="success-card" role="status"><span class="success-mark" aria-hidden="true">✓</span><div><h3>打卡成功</h3><p>{{ point.name }}的风景，已收进你的手记。</p><p>漫游进度 {{ me.completedCount }}/{{ me.totalCount }}<span v-if="me.allCompleted"> · 已完成全部地点，可查看领取凭证</span></p></div></div>
-    <p class="privacy-note">照片用于本次活动打卡记录，不公开展示。</p>
+    <div v-if="completed" class="success-card" role="status">
+      <div class="success-copy"><span class="success-mark" aria-hidden="true">✓</span><div><h3>{{ phase === 'success' ? '打卡成功' : '本站已完成' }}</h3><p>{{ point.name }} · 已保存本人现场照片</p></div></div>
+      <p v-if="me.claimedAt">已领取礼品，感谢参与这次漫游。</p><p v-else-if="!enabled">活动已结束，已有记录仍可查看。</p><p v-else-if="me.allCompleted">全部地点已完成，可以查看本人的领取凭证。</p>
+      <button v-if="me.allCompleted && enabled && !me.claimedAt" type="button" class="success-next" @click="emit('claim')">查看领取凭证</button>
+      <button v-else type="button" class="success-next" @click="emit('continue')">{{ me.claimedAt ? '返回地图' : '继续探索' }}</button>
+    </div>
     <template v-if="completed">
-      <p>已保存本人现场照片；本期不提供修改、删除或补传。</p>
       <p v-if="photoLoading" role="status">正在读取本人照片…</p>
       <img v-if="photoUrl" class="photo-preview saved-photo" :src="photoUrl" :alt="`${point.name}：本人的打卡照片`" />
       <p v-if="photoMessage" role="status">{{ photoMessage }}</p>
       <button v-if="photoMessage" type="button" class="secondary" @click="loadPhoto">重试读取照片</button>
+      <p class="privacy-note">照片不公开展示；已完成地点不替换照片。</p>
     </template>
     <template v-else-if="!enabled"><p>活动暂未开放或已结束，不能上传新照片。</p></template>
-    <template v-else-if="!scanned"><p>请先使用页面内扫一扫识别该地点。刷新后尚未提交的照片需要重新选择；扫码信息未恢复时请重新扫码。</p></template>
-    <template v-else>
-      <label class="upload-label" :for="`photo-${point.key}`"><span class="camera-mark" aria-hidden="true">＋</span><strong>选择现场照片（可拍照或从相册选择）</strong></label>
-      <input :id="`photo-${point.key}`" ref="input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" :disabled="busy || phase === 'unknown'" @change="choose" />
-      <p class="upload-hint">仅一张 JPEG / PNG / WebP，最大 15 MiB。不支持的格式请重新拍照或转换为 JPG/PNG。提交前可重选，刷新会丢失未提交的选择。</p>
-      <img v-if="preview" class="photo-preview local-preview" :src="preview" alt="待提交的现场照片预览" @error="message = '当前照片无法预览，请重新拍照或转换为 JPG/PNG'" />
-      <p v-if="file">已选择：{{ file.name }}</p>
-      <button type="button" :disabled="!file || busy || phase === 'unknown'" @click="submit">{{ busy ? '正在保存…' : '提交现场照片' }}</button>
-      <button v-if="phase === 'unknown'" type="button" class="secondary" @click="verify">核对保存结果</button>
-    </template>
+    <template v-else-if="!scanned"><p class="muted">请先使用页面内扫一扫识别该地点。</p><slot name="scan" /><details class="upload-help"><summary>刷新或返回后没有照片？</summary><p>未提交的照片需要重新选择。请重新扫码后继续。</p></details></template>
+    <div v-else class="upload-form">
+      <figure v-if="preview" class="photo-selection"><img class="photo-preview local-preview" :src="preview" alt="待提交的现场照片预览" @error="message = '当前照片无法预览，请重新拍照或转换为 JPG/PNG'" /><figcaption v-if="file">已选择：{{ file.name }}</figcaption></figure>
+      <button v-if="phase === 'unknown'" type="button" class="verify-button" @click="verify">核对保存结果</button>
+      <button v-if="file || busy || phase === 'unknown'" type="button" :class="{ secondary: phase === 'unknown' }" :disabled="!file || busy || phase === 'unknown'" @click="submit">{{ busy ? '正在保存…' : '提交现场照片' }}</button>
+      <div class="photo-picker" :class="{ 'has-selection': file, 'picker-locked': busy || phase === 'unknown' }">
+        <input :id="`photo-${point.key}`" ref="input" class="photo-input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" :aria-describedby="`photo-help-${point.key}`" :disabled="busy || phase === 'unknown'" @change="choose" />
+        <label class="upload-label" :for="`photo-${point.key}`" :aria-disabled="busy || phase === 'unknown'">
+          <svg v-if="!file" class="camera-mark" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 8h8l3-5h10l3 5h8v21H4Z"/><circle cx="20" cy="18" r="7"/></svg>
+          <strong>{{ file ? '重新选择照片' : '选择现场照片' }}</strong><small v-if="!file">拍照或从相册选择</small>
+        </label>
+      </div>
+      <p class="privacy-note">照片仅用于本次活动记录，不公开展示。</p>
+      <details class="upload-help"><summary>照片要求与说明</summary><p :id="`photo-help-${point.key}`">一张 JPEG / PNG / WebP，最大 {{ Math.round(maxBytes / 1024 / 1024 * 10) / 10 }} MiB。不支持的格式请重新拍照或转换为 JPG/PNG。</p><p>提交前可以重选。刷新会丢失未提交的选择；扫码信息未恢复时请重新扫码。</p></details>
+    </div>
     <p v-if="message" class="notice" :class="{ 'error-notice': ['error','unknown'].includes(phase), 'success-notice': phase === 'success' }" role="status">{{ message }}</p>
   </div>
 </template>

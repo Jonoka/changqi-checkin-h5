@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { claimWithRecovery } from './claim-action.js'
 
 const props = defineProps({ state: Object, enabled: Boolean, label: String, confirmation: String, confirmLabel: String, submit: Function, readState: Function })
-const emit = defineEmits(['state', 'busy', 'login-required'])
+const emit = defineEmits(['state', 'busy', 'locked', 'login-required'])
 const phase = ref('idle')
 const message = ref('')
 const confirming = ref(false)
@@ -44,8 +44,9 @@ async function verify() {
   } catch (error) { if (alive) report(error, true) }
   finally { if (alive) emit('busy', false) }
 }
+watch(phase, value => emit('locked', value === 'unknown'), { flush: 'sync' })
 watch(() => props.state.claimedAt, (value) => { if (value) confirming.value = false })
-onUnmounted(() => { alive = false; emit('busy', false) })
+onUnmounted(() => { alive = false; emit('busy', false); emit('locked', false) })
 </script>
 
 <template>
@@ -54,13 +55,13 @@ onUnmounted(() => { alive = false; emit('busy', false) })
     <template v-else>
       <p v-if="!state.allCompleted">尚未完成全部地点，暂不能领取礼品。</p>
       <p v-else-if="!enabled">活动暂未开放或已结束，不能首次确认领取。</p>
-      <button v-if="state.allCompleted" type="button" :disabled="!allowed || busy || phase === 'unknown'" @click="confirming = true">{{ busy ? '正在核对领取…' : label }}</button>
+      <button v-if="phase === 'unknown'" type="button" class="verify-button" @click="verify">核对领取结果</button>
+      <button v-if="state.allCompleted && enabled && !confirming" type="button" :class="{ secondary: phase === 'unknown' }" :disabled="!allowed || busy || phase === 'unknown'" @click="confirming = true">{{ busy ? '正在核对领取…' : label }}</button>
       <section v-if="confirming && allowed" class="claim-confirm" role="dialog" aria-label="确认领取操作">
         <p>{{ confirmation }}</p>
         <button type="button" @click="confirm">{{ confirmLabel }}</button>
         <button type="button" class="secondary" @click="confirming = false">取消</button>
       </section>
-      <button v-if="phase === 'unknown'" type="button" class="secondary" @click="verify">核对领取结果</button>
     </template>
     <p v-if="message" class="notice" :class="{ 'error-notice': ['error','unknown'].includes(phase), 'success-notice': phase === 'success' }" role="status">{{ message }}</p>
   </div>

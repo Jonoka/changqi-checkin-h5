@@ -1,0 +1,55 @@
+{
+  "source": "assets/illustrations/village-art.mjs",
+  "sourceSha256": "adb78cf512c34153f6eeb921cf546667628905671cefe62c2ca13b696da1cfc0",
+  "method": "Original text-free SVG concept artwork; sharp WebP quality 78, width 720. Not verified scenery.",
+  "files": [
+    {
+      "path": "web/public/art/point-p01-gourd.webp",
+      "bytes": 10526,
+      "width": 720,
+      "height": 480,
+      "sha256": "1c18728675e26d96732d07a7d08ffabd715e76eea0373952e10877c2cbd16315",
+      "svgSha256": "8a083849724a365800b1075a94a8d6a748c1c291af4bbf5f861757d380e1b2bc"
+    },
+    {
+      "path": "web/public/art/point-p02-hall.webp",
+      "bytes": 9698,
+      "width": 720,
+      "height": 480,
+      "sha256": "65634f25346a3b315c3be53ce6ff315ed9e8f54f34e8dac2753906bf8a0ba213",
+      "svgSha256": "c0f24f0ada48778b19a16fe8f3e76b7679f8685d160a38050368302df2fd6eea"
+    },
+    {
+      "path": "web/public/art/point-p03-well.webp",
+      "bytes": 10088,
+      "width": 720,
+      "height": 480,
+      "sha256": "590447ed4501f49e7b8a42cec5e900fbe9816a47f508f4c305b4f55c6912d1a2",
+      "svgSha256": "28abf064f4f2dc13f983739e754e811e18dfb73e20824912dc8b874ea21a367b"
+    },
+    {
+      "path": "web/public/art/point-p04-banyan.webp",
+      "bytes": 11382,
+      "width": 720,
+      "height": 480,
+      "sha256": "4df603189d94f756c08914825245168313e7b389496a899873ae53baafceb816",
+      "svgSha256": "b044f1e7f20e889595698551512ee83d181993ee71f6492fa8978054905b54fa"
+    },
+    {
+      "path": "web/public/art/point-p05-summit.webp",
+      "bytes": 10594,
+      "width": 720,
+      "height": 480,
+      "sha256": "10bd7ce2a88b1d283183f416d549f8f5a7560d1c30524418f4e08a8838a8d2c3",
+      "svgSha256": "89d6ee84542b2d28b4a1c556fe06aab70833fa95ac8d477a31e60ca66fdea597"
+    },
+    {
+      "path": "web/public/art/map-environment.webp",
+      "bytes": 26960,
+      "width": 720,
+      "height": 1240,
+      "sha256": "4870440c4a072980df9dc2173a68cd6a80a66639b7af137bf8258a803d1f6b0b",
+      "svgSha256": "58daf2d6298466c9476d4cf4bf9c78b0d86ad03ee2b56c4274204281d2ef0c74"
+    }
+  ]
+}

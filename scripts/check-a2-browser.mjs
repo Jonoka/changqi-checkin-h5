@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { pointerClick } from './check-a4-browser.mjs'
 
 // Reuses the existing installed-Chrome CDP check; no second browser test framework.
 export async function checkA2Browser({ call, evaluate, click, waitFor, ready, cookie, otherCookie, samplePath, pngPath, badPath, directory, origin, totalCount, checkBrowserSaved, capture = async () => {} }) {
@@ -22,7 +23,7 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   await call('Page.navigate', { url: origin })
   await ready()
   assert.equal(await progress(), `0/${totalCount}`)
-  await evaluate('document.querySelector(".point-button").click()')
+  await pointerClick({ call, evaluate }, '.map-point[data-point-key="p01"]')
   await waitFor('document.querySelector(".photo-panel")', 'view-only photo panel')
   assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false)
   await scan('p01')
@@ -56,6 +57,13 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   assert.equal(await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "提交现场照片").disabled'), true)
   assert.equal(await progress(), `0/${totalCount}`)
   assert.equal(await evaluate('document.body.textContent.includes("照片保存成功")'), false)
+  await click('核对保存结果')
+  await waitFor('document.body.textContent.includes("仍无法确认保存结果")', 'second failed save-result verification remains locked')
+  assert.equal(await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "提交现场照片").disabled'), true)
+  await evaluate("location.hash = 'point/p04'")
+  await waitFor("location.hash === '#point/p01' && document.querySelector('.photo-panel')?.dataset.phase === 'unknown'", 'unknown result blocks point switch')
+  await evaluate("location.hash = 'claim'")
+  await waitFor("location.hash === '#point/p01' && document.querySelector('.claim-panel') === null", 'unknown result blocks claim navigation')
   await capture('photo-unknown')
   await evaluate('window.fetch = window.__a2OriginalFetch')
   await click('核对保存结果')
@@ -103,7 +111,7 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
   await call('Page.reload'); await ready()
   await waitFor('document.querySelector(".saved-photo")?.naturalWidth > 0', 'saved photo restored after reload')
   assert.equal(await progress(), `2/${totalCount}`)
-  for (const width of [390, 430]) {
+  for (const width of [320, 390, 430]) {
     await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
     assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `A2 page fits ${width}px`)
     const screenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })

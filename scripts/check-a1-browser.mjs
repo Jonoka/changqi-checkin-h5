@@ -80,6 +80,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await ready()
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     assert.match(await evaluate('document.body.textContent'), /模拟微信 SDK/)
+    assert.equal(await evaluate('document.querySelector(".point-disclosure").open'), false, 'location list is collapsed by default')
     await capture('home')
     if (visual) {
       await pointerClick({ call, evaluate }, '.map-point[aria-label^="查看卢氏大宗祠"]')
@@ -88,14 +89,14 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
       assert.equal(await evaluate('document.activeElement.getBoundingClientRect().top < innerHeight'), true)
       await afterView()
       assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false)
-      await click('返回地点列表')
+      await pointerClick({ call, evaluate }, '.back-button')
       await waitFor('document.querySelector(".map-point")', 'return to schematic map')
     }
-    for (const width of [390, 430]) {
+    for (const width of [320, 390, 430]) {
       await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
       assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `No horizontal overflow at ${width}px`)
     }
-    await evaluate(`[...document.querySelectorAll('.point-button')].find(b => b.textContent.includes('卢氏大宗祠')).click()`)
+    await pointerClick({ call, evaluate }, '.map-point[data-point-key="p02"]')
     await waitFor('document.querySelector(".point-detail")', 'point viewing')
     await afterView()
     assert.match(await evaluate('document.body.textContent'), /仅查看地点/)

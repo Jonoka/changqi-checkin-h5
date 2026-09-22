@@ -16,11 +16,11 @@ import { createMysqlSession } from '../server/session.js'
 import { createWechatClient } from '../server/wechat.js'
 import { findOrCreateUser } from '../server/identity.js'
 import { checkA1Browser } from './check-a1-browser.mjs'
-import { checkA2Mysql, checkA2Restart } from './check-a2-mysql.mjs'
+import { checkA2Mysql, checkA2Restart, uploadFile } from './check-a2-mysql.mjs'
 import { checkA2Browser } from './check-a2-browser.mjs'
 import { checkA3Mysql, checkA3Restart } from './check-a3-mysql.mjs'
 import { checkA3Browser } from './check-a3-browser.mjs'
-import { checkA4Pages } from './check-a4-browser.mjs'
+import { checkA4Pages, checkA4LastPoint } from './check-a4-browser.mjs'
 const includeA4 = process.argv.includes('--a4')
 const includeA3 = process.argv.includes('--a3') || includeA4
 const includeA2 = process.argv.includes('--a2') || includeA3
@@ -411,11 +411,30 @@ try {
       afterScan: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p02'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
       afterA1: includeA2 ? async (tools) => {
         await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length })
-        ok('A2 actual Chrome file selection/preview/reselect/upload, unknown-result retry lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)')
-        if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory }); ok('A3 actual Chrome: QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
+        ok('A2 actual Chrome file selection/preview/reselect/upload, consecutive unknown-result lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)')
         if (includeA4) {
-          await checkA4Pages({ ...tools, origin: 'http://localhost:5173', cookie: proxied.cookie, credential: a3.credential, activity })
-          ok('A4 actual Chrome: pointer map view without scan eligibility, dynamic map/list/N, 390/430px state screenshots, 320px/reduced motion, guide/errors/closure/stats; real SQL with simulated WeChat/network faults')
+          await checkA4Pages({ ...tools, origin: 'http://localhost:5173', cookie: proxied.cookie, progressCookie: a2.cookie, credential: a3.credential, activity })
+          ok('A4 actual Chrome: illustrated map, collapsed/expanded list, five keyed point views/scans, config reorder/N, art fallback, 320/390/430 screenshots, guide/errors/closure/stats')
+
+          const a2Ui = browser('http://localhost:5173')
+          a2Ui.cookie = a2.cookie
+          const bytes = await fs.readFile(a2.samplePath)
+          for (const key of ['p03', 'p04']) {
+            const scan = await a2Ui.request('/api/scan', { body: { result: `http://localhost:5173/q/${key}` } })
+            assert.equal(scan.status, 200)
+            const saved = await uploadFile('http://localhost:5173', a2Ui, key, bytes)
+            assert.equal(saved.status, 200)
+          }
+          assert.equal((await a2Ui.request('/api/me')).payload.data.completedCount, activity.points.length - 1)
+          await checkA4LastPoint({ ...tools, origin: 'http://localhost:5173', cookie: a2.cookie, samplePath: a2.samplePath,
+            point: activity.points.find((point) => point.key === 'p05'), totalCount: activity.points.length })
+          const finalState = (await a2Ui.request('/api/me')).payload.data
+          assert.equal(finalState.allCompleted, true); assert.equal(finalState.claimedAt, null)
+          ok('A4 final actual photo save: last point exposes owner voucher action in place and opens #claim, never the staff /r page')
+        }
+        if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory }); ok('A3 actual Chrome: owner QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
+        if (includeA4) {
+          console.log(`A4 visual review: ${path.relative(process.cwd(), tempDirectory)}/index.html`)
           console.log(`A4 screenshot evidence: ${path.relative(process.cwd(), tempDirectory)}/a4-screenshots.json`)
         }
       } : null
