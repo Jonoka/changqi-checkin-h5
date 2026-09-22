@@ -12,7 +12,7 @@
 - 已确认：A1–A3 本地业务通过；A2 连续失败专项通过；A4 本地及用户视觉确认通过。首页扫一扫首屏、就绪静默、上传现场照片、无拍照提示/本人修饰/地点标题框、guide“参与方式”保持不变。五处插画、配置和 A1–A4 运行时代码均未改。本轮新增最终地点码导出与最小测试，并增加可校验的旧视觉证据复用模式，不删除实时布局/业务断言。
 - 本轮实际验证：`npm run check` 配置/HTTP + 41/41 Node 测试、`npm run build`、完整 `npm run test:a4:mysql` 39 项通过；五张 PNG 与五张 SVG 栅格图用 OpenCV 逐张回读，10/10 完整文本一致。新增 6 项二维码测试与 1 项视觉证据复用保护。Windows Node 24.12.0/npm 11.6.2，独立回环 MySQL 8.4.9:3317、实际 Chrome/Vite、真实文件/SQL/应用重启；微信网络/SDK 仍明确模拟，图片是生成夹具。
 - 执行入口：ChatGPT 网页端或电脑本地 Agent 开发均可；Actions 统一构建，有 SSH 权限的本地 Agent 默认负责下载、上传和部署。
-- 服务器只读核验：`root@100.95.32.56` 可通过 Tailscale 连接；Alibaba Cloud Linux 3.2104 LTS 内核 `5.10.134-18.al8.x86_64`，`x86_64`，约 0.94 GiB RAM，根盘 40G/可用 19G。80/443/3306/3000/3001 等端口已有监听；远端 PATH 未发现 Docker/Compose 命令，仅发现宝塔 `bt`。本轮未安装、重启或改动服务器。
+- 服务器只读核验：`root@100.95.32.56` 可通过 Tailscale 连接；Alibaba Cloud Linux 3.2104 LTS 内核 `5.10.134-18.al8.x86_64`，`x86_64`，约 0.94 GiB RAM，根盘 40G/可用 19G。Nginx 1.26.2、MySQL 服务 active，MySQL 客户端无密码查询被拒绝；配置端口 3306、socket `/tmp/mysql.sock`、数据目录 `/www/server/data`。80/443/3306/3000/3001 等端口已有监听，3000/3001 属于现有 Node 应用；远端 PATH 未发现 Docker/Compose 命令，仅发现宝塔 `bt`。`cq.fsxinhuo.cn` 当前为静态宝塔默认站点，Nginx 没有本项目反代，证书有效期至 2026-12-20；本轮未安装、重启或改动服务器。
 - Windows 工作区已实际核对并开发，保留既有忽略文件、视觉原图压缩包及其他工作区；没有读取或提交真实凭据。A6.1 镜像与 Actions 改动已完成，本地 `npm run check` 41/41、`npm run build` 通过；本机 Docker 引擎未启动，未伪造本地镜像运行结果。生产 MySQL、微信真机和服务器部署仍未验证。
 - A6.3：正式 origin `https://cq.fsxinhuo.cn` 与 p01–p05 绑定已定版；10 张码、清单、约 5cm 离线打印页和警示 ZIP 已生成并自动解码。仍为“正式地址已定，待真机/纸样试扫，不可直接批量印刷。”地址和 A4 视觉不再是外部缺项。
 - 当前接续：A5 本地回归通过、微信真机未验；A6.1 已补齐 schema/建表脚本进镜像、固定已核对的 `linux/amd64`、临时 MySQL 镜像冒烟和归档校验文件。Actions run `35742761304` 在源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc` 上构建、冒烟和导出均通过，但 artifact 上传因 GitHub 存储配额失败，未产生可下载交付包；A6.3 样张和自动解码完成、真实纸样未验；A6.2 仅完成服务器只读核验，未安装 Docker、未配置或更新站点。生产写入、部署和联调授权需按目标继续。
@@ -193,12 +193,12 @@ A5/A6.3 实际起点：581fb42728ecb28bebd3025305deea24207af21c；main 为 cc411
 成功日志：tmp/mysql-a5-3317-NEqc0T/suite.log；实时布局结果 tmp/changqi_a1_test_695566bf3c64/a4-regression.json，129 个状态/宽度组合全部通过。两名实际上传完成游客 self/staff 领取后人数=2、12 请求并发只首次、连续核对失败锁、失败不假成功、重启恢复均回归。
 A4 证据：TEST_A4_REUSE_EVIDENCE=tmp/changqi_a1_test_577fd68e4b36；指纹 e44424a068e9df2af09357ff8f60b1ebd8f7494e47aecb58cf6ebdb02dc27fdb 未变。复用已确认 129 整页+6首屏+3地图图，不冒称重截或本轮逐图人工审阅；所有实时布局/业务断言保留。
 A6.3：tmp/point-qrs-cq-fsxinhuo-cn/ 含 10 张 PNG/SVG、manifest、UTF-8 CSV、index.html、印刷说明和自动解码报告；ZIP 为 tmp/point-qrs-cq-fsxinhuo-cn-待验证纸样.zip（16,264 字节，SHA256 1dd40cf100b50c953e68d3169573be01e8abaec386832301a8a9b27b4f2e17c2）。包优先生成于 A4 基线+本轮脚本，manifest 如实记录 dirty 标记和源文件哈希，不伪造最终干净 HEAD。
-公网/服务器：公共 DoH 两家均为 112.74.27.188；HTTPS 证书匹配且有效。首页仍默认“恭喜，站点创建成功！”，HTTP 未跳 HTTPS，/api/activity 和五条 /q/ 均404；未提供项目链路。已通过 Tailscale 只读登录 root@100.95.32.56，确认 x86_64、约 1GB RAM、根盘可用 19G、宝塔与既有端口；未发现 Docker/Compose，未访问个人领取码、未写库、未改服务器。
+公网/服务器：公共 DoH 两家均为 112.74.27.188；HTTPS 证书匹配且有效。首页仍默认“恭喜，站点创建成功！”，HTTP 未跳 HTTPS，`/api/activity` 和五条 `/q/` 均404；未提供项目链路。已通过 Tailscale 只读登录 root@100.95.32.56，确认 x86_64、约 1GB RAM、根盘可用 19G、宝塔静态站点、MySQL 5.7 系列客户端/3306 服务与既有 Node 端口；未发现 Docker/Compose，未访问个人领取码、未写库、未改服务器。
 微信/纸样：实际公众号能力、后台域名/校验文件/出口白名单、运行凭据、菜单、iOS/Android 两类扫码入口、现场照片/领取和约5cm真实纸样尚未验证。当前官方 OAuth/JS-SDK 正文已读取，协议说明不等于账号配置成功；生产 MySQL/Cookie/照片目录和反代仍未实测。
 印刷状态：正式地址已定，待真机/纸样试扫，不可直接批量印刷。文件和自动解码完成不代替真机/纸样；无用户批量印刷批准。
 历史构建：源码 ca5f5b7f08bcaf1133bc162a05a60307747ec379；run 35587927134 / attempt 1；镜像标签 changqi-checkin-h5:ca5f5b7f08bc-35587927134-1；linux/amd64 测试平台，platformVerified=false；当时 artifact 上传额度失败。当前额度未知，未删其他项目产物、未调整付费或忽略上传错误。
 A6.1 本轮：Dockerfile 加入一次性建表所需 schema/脚本，固定 Node 24.21.0 amd64 基础镜像 digest；Actions 平台按服务器实测改为 linux/amd64、platformVerified=true，增加临时 MySQL 的真实镜像启动冒烟、镜像内 Node/npm 版本记录和归档 SHA-256。Windows `npm run check` 41/41、`npm run build`、`git diff --check` 通过；run `35742761304` / attempt 1 在源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc` 上构建/冒烟/导出通过，镜像标签 `changqi-checkin-h5:df4f3edf5698-35742761304-1`；Upload artifact 因 GitHub 配额失败，未取得可下载包。
-下一步：等待 GitHub artifact 配额恢复或由用户提供明确的替代中转授权；不重复触发同一构建、不删除其他产物。产物可下载后，再取得明确生产变更范围，决定是否安装 Docker、创建本项目目录/库/账号、配置 Nginx 并部署。之后由用户操作 iOS/Android 微信及真实纸样。
+下一步：等待 GitHub artifact 配额恢复或由用户提供明确的替代中转授权；不重复触发同一构建、不删除其他产物。产物可下载后，还需取得明确生产变更范围，决定是否在现有 1GB 服务器安装 Docker、选择未占用回环端口、创建本项目目录/库/账号、配置 Nginx 并部署；不能复用现有 3000/3001 或默认站点。之后由用户操作 iOS/Android 微信及真实纸样。
 本轮未执行：服务器安装/生产部署/测试写入、DNS/证书/公众号/菜单/托管修改、artifact 下载、Docker load、Compose 更新。二维码已生成交付待验证样张，不依赖 Actions artifact。
 ```
 
