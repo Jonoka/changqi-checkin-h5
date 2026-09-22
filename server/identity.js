@@ -39,7 +39,7 @@ export async function findOrCreateUser(pool, openid) {
   throw new Error('Could not allocate a claim code')
 }
 
-function chinaTime(value) {
+export function chinaTime(value) {
   if (!value) return null
   if (value instanceof Date) return `${new Date(value.getTime() + 8 * 3600000).toISOString().slice(0, 19)}+08:00`
   return `${String(value).replace(' ', 'T')}+08:00`

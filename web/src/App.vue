@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { api, post } from './api.js'
 import { createScanner, loadWechatSdk } from './wechat-scan.js'
 import PhotoPanel from './PhotoPanel.vue'
+import ClaimPanel from './ClaimPanel.vue'
 
 const activity = ref(null)
 const error = ref('')
@@ -13,6 +14,7 @@ const selectedKey = ref('')
 const scanNotice = ref('')
 const scannedKey = ref('')
 const uploadBusy = ref(false)
+const claimBusy = ref(false)
 const demoResult = ref('')
 const demoBusy = ref(false)
 const scannerState = reactive({ phase: 'idle', message: '' })
@@ -30,6 +32,11 @@ function updateMe(state) {
 function setUploadBusy(value) {
   uploadBusy.value = value
   if (value) stateRevision++ // Discard an older in-flight progress response once an upload starts.
+}
+
+function setClaimBusy(value) {
+  claimBusy.value = value
+  if (value) stateRevision++
 }
 
 function loginFailure(cause) {
@@ -101,7 +108,7 @@ function tryAutomaticLogin() {
 }
 
 async function loadMe(automatic = false) {
-  if (identityBusy || demoBusy.value || uploadBusy.value) return
+  if (identityBusy || demoBusy.value || uploadBusy.value || claimBusy.value) return
   identityBusy = true
   const revision = stateRevision
   if (!me.value) identityState.value = 'loading'
@@ -135,7 +142,7 @@ async function loadActivity() {
 }
 
 async function demoLogin(identity) {
-  if (demoBusy.value || identityBusy || uploadBusy.value) return
+  if (demoBusy.value || identityBusy || uploadBusy.value || claimBusy.value) return
   scannedKey.value = ''
   demoBusy.value = true
   me.value = null
@@ -152,7 +159,7 @@ async function demoLogin(identity) {
 }
 
 async function demoScan() {
-  if (demoBusy.value || uploadBusy.value) return
+  if (demoBusy.value || uploadBusy.value || claimBusy.value) return
   demoBusy.value = true
   scannerState.message = '正在识别开发演示二维码…'
   try {
@@ -210,15 +217,18 @@ onUnmounted(() => {
         </template>
       </div>
 
+      <ClaimPanel v-if="me" :key="me.userLabel" :me="me" :activity="activity"
+        @state="updateMe" @busy="setClaimBusy" @login-required="loginFailure" />
+
       <div v-if="activity.developmentDemo" class="demo-controls">
-        <button type="button" :disabled="demoBusy || uploadBusy" @click="demoLogin('visitor-a')">演示游客 A</button>
-        <button type="button" :disabled="demoBusy || uploadBusy" @click="demoLogin('visitor-b')">演示游客 B</button>
+        <button type="button" :disabled="demoBusy || uploadBusy || claimBusy" @click="demoLogin('visitor-a')">演示游客 A</button>
+        <button type="button" :disabled="demoBusy || uploadBusy || claimBusy" @click="demoLogin('visitor-b')">演示游客 B</button>
         <label for="demo-qr">开发演示：输入完整地点二维码 URL</label>
         <input id="demo-qr" v-model="demoResult" type="text" autocomplete="off" />
-        <button type="button" :disabled="!me || !activity.enabled || demoBusy || uploadBusy" @click="demoScan">识别演示地点码</button>
+        <button type="button" :disabled="!me || !activity.enabled || demoBusy || uploadBusy || claimBusy" @click="demoScan">识别演示地点码</button>
       </div>
       <div v-else class="scan-controls">
-        <button type="button" :disabled="!me || !inWechat || !activity.enabled || uploadBusy || scannerState.phase !== 'ready'" @click="scanner.scan">扫一扫打卡</button>
+        <button type="button" :disabled="!me || !inWechat || !activity.enabled || uploadBusy || claimBusy || scannerState.phase !== 'ready'" @click="scanner.scan">扫一扫打卡</button>
         <button v-if="me && inWechat && ['error', 'idle'].includes(scannerState.phase)" type="button" class="secondary" @click="scanner.initialize">重新准备扫一扫</button>
       </div>
       <p v-if="scannerState.message" class="notice" role="status">{{ scannerState.message }}</p>

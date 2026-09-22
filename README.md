@@ -29,11 +29,11 @@ npm start
 
 身份功能需要真实 MySQL 连接和安全随机生成、不少于 32 字符的 `SESSION_SECRET`；密钥仅保存在本地 `.env`。`express-session` 与 `express-mysql-session` 在应用启动时建立必要的 `sessions` 技术表；账号需有建表权限。会话 Cookie 为 HttpOnly、SameSite=Lax，有效期 7 天；HTTPS 使用 Secure。生产遵守 DEPLOY 的回环应用端口及可信反向代理约定，不将应用端口直接暴露到公网。
 
-使用 Vite 时，在 `.env` 设置 `PUBLIC_ORIGIN=http://localhost:5173`、`PORT=3000`；两个终端分别运行 `npm start` 与 `npm run dev`。`/api`、`/auth`、`/q`、`/health` 均由 Vite 代理到后端。只运行构建后的服务时，`PUBLIC_ORIGIN` 改为该服务实际入口（本地通常是 `http://localhost:3000`）。二维码域名、页面签名及回调都使用同一个 `PUBLIC_ORIGIN`，不能混用 localhost、127.0.0.1 或不同端口。
+使用 Vite 时，在 `.env` 设置 `PUBLIC_ORIGIN=http://localhost:5173`、`PORT=3000`；两个终端分别运行 `npm start` 与 `npm run dev`。`/api`、`/auth`、`/q`、`/health`、`/stats` 均由 Vite 代理到后端。`/r/:claimCode` 由同一 Vue 入口渲染独立派发页，不走微信授权。只运行构建后的服务时，`PUBLIC_ORIGIN` 改为该服务实际入口（本地通常是 `http://localhost:3000`）。二维码域名、页面签名及回调都使用同一个 `PUBLIC_ORIGIN`，不能混用 localhost、127.0.0.1 或不同端口。
 
 没有微信联调条件时，可在本地显式设置 `NODE_ENV=development` 与 `DEV_MOCK_ENABLED=true`，同时配置独立开发数据库和 `SESSION_SECRET`。页面会显示“开发演示”，提供固定游客 A/B 和完整地点码 URL 输入；它们复用真实用户表、MySQL 会话与 `/api/scan`，不是另一套假进度数据。生产拒绝模拟开关，未配置微信不会自动退回模拟身份。模拟身份会话在关闭模拟后也不能当成正式身份使用。
 
-真实微信使用本地填写的 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`，先确认授权域名、JS 接口安全域名、接口权限及服务端网络条件；不改变公众号菜单、消息服务或第三方托管配置。OAuth 错误页提供手动重试，接口未登录返回 JSON 401。直接打开 `/q/p01` 始终是公众号入口引导；页内扫码识别地点但不增加进度。地点查看使用 hash 路由，不授予扫码资格；扫码后可选择现场照片、预览、重选并提交。领取写入仍未接入。
+真实微信使用本地填写的 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`，先确认授权域名、JS 接口安全域名、接口权限及服务端网络条件；不改变公众号菜单、消息服务或第三方托管配置。OAuth 错误页提供手动重试，接口未登录返回 JSON 401。直接打开 `/q/p01` 始终是公众号入口引导；页内扫码识别地点但不增加进度。地点查看使用 hash 路由，不授予扫码资格；扫码后可选择现场照片、预览、重选并提交。完成全部地点后可出示本人领取码、确认已领取，或由持码者在派发页确认；首次时间与渠道只记录一次。
 
 ### 照片存储与上传
 
@@ -44,6 +44,14 @@ npm start
 源文件上限 15 MiB，按实际字节解码 JPEG/PNG/WebP，拒绝损坏、不支持或多帧图片；纠正方向、最长边缩至 1600px 且不放大小图，去除元数据并输出 JPEG。高像素输入另有解码资源上限，无法解码时提示重拍/转换，不提供 HEIC 转换。临时目录在 `UPLOAD_DIR/.tmp`；普通失败及并发多余文件由本次请求清理。若数据库提交结果与回读同时无法确认，保留可能已提交的照片并返回失败，需核对后处理，不能误删有效记录对应文件。
 
 上传中禁重复提交；请求失败先读本人状态，无法确认时要求先核对而非盲目重传。刷新不会保留尚未提交的文件；前端未恢复扫码信息时提示重新扫码。保存后的照片已清理时返回 `410 / PHOTO_MISSING`，历史进度仍保留。
+
+### 领取与只读人数
+
+本人 `POST /api/me/claim` 与持码派发 `POST /api/r/:claimCode/claim` 都使用空 JSON 对象 `{}`，服务端固定渠道，客户端不传用户或渠道。两条路径共用首次条件更新，重复操作不增加人数、不覆盖首次时间。读取 `/r/:claimCode` 或其公开数据接口不会写入；持链接即可确认是已约定的简化，不代表员工认证。派发页不显示照片或 OpenID。领取结果不明时先刷新核对，切勿因此重复派发实物。
+
+人数仅在 `/stats` 服务器渲染，没有未保护的数据接口或管理菜单。使用现成 `express-basic-auth` 固定凭据保护，在本地或服务器环境文件中配置 `STATS_USER` 和 `STATS_PASSWORD`；两项同时为空时关闭查询并返回 503，绝不退回公开访问。用户名使用字母、数字、点、下划线或连字符，密码使用至少 16 字符的安全随机值，不使用演示密码。该凭据只供负责人只读查询，不是员工账号。浏览器通过标准 Basic Auth 提示输入；生产必须使用现有 HTTPS 入口，凭据不放 URL、Git 或前端变量。
+
+`/stats` 只显示已标记领取人数、查询时间和刷新按钮；数据库失败显示错误，不显示假 0。领取码由本地依赖从本人 `claimUrl` 生成，不发送给第三方二维码服务；二维码与链接仅向派发人员出示。开发演示必须使用独立测试库，不能将模拟领取记录混入生产统计。
 
 ### 轻量验证
 
@@ -60,6 +68,8 @@ $env:TEST_DB_PASSWORD = '<仅在本地填写>'
 $env:TEST_BROWSER_EXECUTABLE = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
 npm run test:a1:mysql
 ```
+
+A3 使用同一测试入口执行 `npm run test:a3:mysql`，包含 A1/A2 回归、两路领取、并发与固定凭据统计检查。仍须显式设置前述 `TEST_DB_*` 和 `TEST_BROWSER_EXECUTABLE`；不新增测试平台，不触发 Actions 镜像打包。
 
 A2 复用同一个独立测试库/应用/浏览器入口，执行 `npm run test:a2:mysql`。可显式设置 `TEST_PHOTO_PATH` 为本地测试照片路径；脚本只复制此样本，不修改原文件。未提供时使用生成的图片夹具并明确提示，不冒称真实照片样本。脚本会真实验证 multipart、图片处理、数据库拒绝写入、并发唯一记录、私有照片及应用进程重启；不会使用生产库。测试照片和可选的浏览器截图只保留在忽略的 `tmp/` 下，不提交 Git。
 

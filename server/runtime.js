@@ -35,8 +35,15 @@ export function runtimeConfig(env = process.env) {
   if (production && (!path.isAbsolute(env.UPLOAD_DIR) || within(projectRoot, uploadDir))) {
     throw new Error('Production UPLOAD_DIR must be an absolute persistent directory outside the application package')
   }
+  // Optional fixed read-only statistics credential; never fall back to public access.
+  const statsUser = env.STATS_USER || ''
+  const statsPassword = env.STATS_PASSWORD || ''
+  if (Boolean(statsUser) !== Boolean(statsPassword)) throw new Error('Configure both STATS_USER and STATS_PASSWORD, or leave statistics disabled')
+  if (statsUser && (!/^[A-Za-z0-9._-]{1,64}$/.test(statsUser) || statsPassword.length < 16 || /[\r\n]/.test(statsPassword))) {
+    throw new Error('Statistics credentials require a simple username and a random password of at least 16 characters')
+  }
   return {
-    production, mockEnabled, sessionSecret, uploadDir,
+    production, mockEnabled, sessionSecret, uploadDir, statsUser, statsPassword,
     publicOrigin: origin.origin,
     secureCookie: origin.protocol === 'https:',
     appId: env.WECHAT_APP_ID || '',

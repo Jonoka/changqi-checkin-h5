@@ -7,6 +7,8 @@ import { runtimeConfig } from './runtime.js'
 import { HttpError, sendApiError, sendPage } from './http.js'
 import { mountGuide, mountIdentityAndScan } from './a1.js'
 import { mountCheckins } from './checkins.js'
+import { mountPublicClaims, mountMyClaim } from './claims.js'
+import { mountStats } from './stats.js'
 
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url))
 const webDistDirectory = path.resolve(serverDirectory, '..', 'web', 'dist')
@@ -43,9 +45,13 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
 
   // Public guide routes never load or mutate a user session, even with a login cookie.
   mountGuide(app, activityConfig, runtime)
+  mountPublicClaims(app, { pool, runtime, activityConfig })
+  mountStats(app, { pool, runtime })
+  app.use('/r', (_request, response, next) => { response.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); next() })
   if (sessionMiddleware) app.use(['/api', '/auth'], sessionMiddleware)
   mountIdentityAndScan(app, { pool, runtime, wechatClient, sessionsAvailable: Boolean(sessionMiddleware), activityConfig })
   mountCheckins(app, { pool, runtime, activityConfig })
+  mountMyClaim(app, { pool, runtime, activityConfig })
   app.use('/auth', (_request, response) => sendPage(response, { status: 404, title: '入口不存在', message: '请从公众号菜单重新进入活动' }))
 
   app.use((request, response, next) => {

@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:3000',
       '/auth': 'http://127.0.0.1:3000',
       '/q': 'http://127.0.0.1:3000',
+      '/stats': 'http://127.0.0.1:3000',
       '/health': 'http://127.0.0.1:3000'
     }
   },

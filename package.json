@@ -9,19 +9,22 @@
   "scripts": {
     "dev": "vite --config web/vite.config.js",
     "start": "node server/index.js",
-    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs && node --test scripts/a1-unit.test.mjs scripts/a2-unit.test.mjs",
+    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs && node --test scripts/a1-unit.test.mjs scripts/a2-unit.test.mjs scripts/a3-unit.test.mjs",
     "test:a1:mysql": "node scripts/check-a1-mysql.mjs",
     "test:a2:mysql": "node scripts/check-a1-mysql.mjs --a2",
+    "test:a3:mysql": "node scripts/check-a1-mysql.mjs --a3",
     "db:schema": "node scripts/apply-schema.mjs",
     "build": "vite build --config web/vite.config.js"
   },
   "dependencies": {
     "dotenv": "18.0.1",
     "express": "5.2.1",
+    "express-basic-auth": "1.2.1",
     "express-mysql-session": "3.0.3",
     "express-session": "1.19.0",
     "multer": "2.4.0",
     "mysql2": "3.24.4",
+    "qrcode": "1.5.4",
     "sharp": "0.35.4",
     "vue": "3.5.43"
   },

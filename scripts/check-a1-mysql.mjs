@@ -18,7 +18,10 @@ import { findOrCreateUser } from '../server/identity.js'
 import { checkA1Browser } from './check-a1-browser.mjs'
 import { checkA2Mysql, checkA2Restart } from './check-a2-mysql.mjs'
 import { checkA2Browser } from './check-a2-browser.mjs'
-const includeA2 = process.argv.includes('--a2')
+import { checkA3Mysql, checkA3Restart } from './check-a3-mysql.mjs'
+import { checkA3Browser } from './check-a3-browser.mjs'
+const includeA3 = process.argv.includes('--a3')
+const includeA2 = process.argv.includes('--a2') || includeA3
 
 // Intentionally no DB_* fallback: only an explicitly selected local test instance is allowed.
 const settings = {
@@ -34,6 +37,8 @@ const database = `changqi_a1_test_${randomBytes(6).toString('hex')}`
 const tempDirectory = path.resolve('tmp', database)
 const envFile = path.join(tempDirectory, '.env')
 const sessionSecret = randomBytes(32).toString('hex')
+const statsUser = 'test-report'
+const statsPassword = randomBytes(24).toString('hex')
 let admin, pool, sessions, server, child, vite
 let createdDatabase = false
 let passed = 0
@@ -44,7 +49,7 @@ const ok = (name) => { passed++; console.log(`PASS ${passed}: ${name}`) }
 function cleanChildEnv() {
   const env = { ...process.env }
   for (const key of Object.keys(env)) {
-    if (key.startsWith('DB_') || key.startsWith('WECHAT_') || ['NODE_ENV', 'DEV_MOCK_ENABLED', 'PUBLIC_ORIGIN', 'SESSION_SECRET', 'PORT', 'REQUIRE_DB', 'UPLOAD_DIR'].includes(key)) delete env[key]
+    if (key.startsWith('DB_') || key.startsWith('WECHAT_') || key.startsWith('STATS_') || ['NODE_ENV', 'DEV_MOCK_ENABLED', 'PUBLIC_ORIGIN', 'SESSION_SECRET', 'PORT', 'REQUIRE_DB', 'UPLOAD_DIR'].includes(key)) delete env[key]
   }
   env.DOTENV_CONFIG_PATH = envFile
   env.DOTENV_CONFIG_QUIET = 'true'
@@ -56,6 +61,7 @@ async function writeTestEnv(overrides = {}) {
     NODE_ENV: 'development', PUBLIC_ORIGIN: 'http://localhost:3000', PORT: '0',
     DEV_MOCK_ENABLED: 'true', SESSION_SECRET: sessionSecret, TZ: 'Asia/Shanghai',
     UPLOAD_DIR: path.join(tempDirectory, 'photos'),
+    STATS_USER: statsUser, STATS_PASSWORD: statsPassword,
     DB_HOST: settings.host, DB_PORT: String(settings.port), DB_USER: settings.user,
     DB_PASSWORD: settings.password, DB_NAME: database, REQUIRE_DB: 'true', ...overrides
   }
@@ -119,7 +125,7 @@ function simulatedWechat(publicOrigin) {
         if (code === 'network-failure') throw new Error('simulated private upstream error')
         if (code === 'invalid-code') return { ok: true, json: async () => ({ errcode: 40029, errmsg: 'simulated invalid code' }) }
         if (code === 'non-json') return { ok: true, json: async () => { throw new Error('simulated non-JSON') } }
-        assert.ok(['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser'].includes(code), 'Unrecognized mock code must not establish identity')
+        assert.ok(['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser', 'a3-a', 'a3-b', 'a3-race', 'a3-closed', 'a3-incomplete', 'a3-ui-self', 'a3-ui-staff'].includes(code), 'Unrecognized mock code must not establish identity')
         return { ok: true, json: async () => ({ openid: `simulated-${code}`, access_token: 'simulated-oauth-token' }) }
       }
       if (url.pathname === '/cgi-bin/stable_token') return { ok: true, json: async () => ({ access_token: 'simulated-token', expires_in: 7200 }) }
@@ -134,6 +140,7 @@ async function openApp({ origin, port = 0, production = false } = {}) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) })
   const baseUrl = `http://127.0.0.1:${server.address().port}`
   const runtime = runtimeConfig({ NODE_ENV: production ? 'production' : 'test', PUBLIC_ORIGIN: origin || baseUrl,
+    STATS_USER: statsUser, STATS_PASSWORD: statsPassword,
     SESSION_SECRET: sessionSecret, WECHAT_APP_ID: 'simulated-app', WECHAT_APP_SECRET: 'simulated-secret', UPLOAD_DIR: production ? '/test-only' : path.join(tempDirectory, 'photos') })
   sessions = await createMysqlSession(pool, runtime)
   const app = createApp({ activityConfig: activity, pool, runtime, sessionMiddleware: sessions.middleware, wechatClient: simulatedWechat(runtime.publicOrigin) })
@@ -389,6 +396,10 @@ try {
   if (includeA2) {
     a2 = await checkA2Mysql({ pool, activity, runtime: proxyApp.runtime, baseUrl: 'http://localhost:5173', directory: tempDirectory, browser, oauth, ok })
   }
+  let a3
+  if (includeA3) {
+    a3 = await checkA3Mysql({ pool, settings: { ...settings, database }, activity, runtime: proxyApp.runtime, baseUrl: 'http://localhost:5173', directory: tempDirectory, browser, oauth, ok })
+  }
   if (process.env.TEST_BROWSER_EXECUTABLE) {
     const rowsBeforeBrowser = await count('checkins')
     await checkA1Browser({
@@ -396,7 +407,11 @@ try {
       origin: 'http://localhost:5173', cookie: proxied.cookie, totalCount: activity.points.length,
       afterView: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p01'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
       afterScan: async () => { assert.equal((await savedSession(proxied)).scannedPointKey, 'p02'); assert.equal(await count('checkins'), rowsBeforeBrowser) },
-      afterA1: includeA2 ? async (tools) => { await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length }); ok('A2 actual Chrome file selection/preview/reselect/upload, unknown-result retry lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)') } : null
+      afterA1: includeA2 ? async (tools) => {
+        await checkA2Browser({ ...tools, ...a2, origin: 'http://localhost:5173', totalCount: activity.points.length })
+        ok('A2 actual Chrome file selection/preview/reselect/upload, unknown-result retry lock, response-loss recovery, reload and private-photo isolation (WeChat SDK simulated)')
+        if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory }); ok('A3 actual Chrome: QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
+      } : null
     })
     ok('ACTUAL Chromium/Vue page: real MySQL identity and unchanged progress, map-only view, SDK cancel/fail/retry/resume, reload and ordinary-browser hint; SDK SIMULATED; 390/430px no overflow')
   } else {
@@ -409,7 +424,8 @@ try {
   if (includeA2) {
     await checkA2Restart({ start: startRealProcess, stop: stopRealProcess, browser, directory: tempDirectory, pool, ok })
   }
-  console.log(`${includeA2 ? 'A1+A2' : 'A1'} MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
+  if (includeA3) await checkA3Restart({ start: startRealProcess, stop: stopRealProcess, browser, pool, activity, directory: tempDirectory, ok })
+  console.log(`${includeA3 ? 'A1+A2+A3' : includeA2 ? 'A1+A2' : 'A1'} MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
 } finally {
   activity.enabled = initialEnabled
   if (vite) await vite.close()
