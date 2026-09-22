@@ -123,9 +123,24 @@ jobs:
             sleep 2
           done
 
-          activity="$(curl --fail --silent --show-error http://127.0.0.1:18080/api/activity)"
-          home="$(curl --fail --silent --show-error http://127.0.0.1:18080/)"
-          guide="$(curl --fail --silent --show-error http://127.0.0.1:18080/q/p01)"
+          if ! activity="$(curl --fail --silent --show-error http://127.0.0.1:18080/api/activity)"; then
+            echo 'smoke request failed: /api/activity'
+            docker inspect --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$app"
+            docker logs "$app"
+            exit 1
+          fi
+          if ! home="$(curl --fail --silent --show-error http://127.0.0.1:18080/)"; then
+            echo 'smoke request failed: /'
+            docker inspect --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$app"
+            docker logs "$app"
+            exit 1
+          fi
+          if ! guide="$(curl --fail --silent --show-error http://127.0.0.1:18080/q/p01)"; then
+            echo 'smoke request failed: /q/p01'
+            docker inspect --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$app"
+            docker logs "$app"
+            exit 1
+          fi
           assert_contains() {
             local label="$1" body="$2" expected="$3"
             if [[ "$body" != *"$expected"* ]]; then
