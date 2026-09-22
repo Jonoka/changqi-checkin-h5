@@ -126,9 +126,17 @@ jobs:
           activity="$(curl --fail --silent --show-error http://127.0.0.1:18080/api/activity)"
           home="$(curl --fail --silent --show-error http://127.0.0.1:18080/)"
           guide="$(curl --fail --silent --show-error http://127.0.0.1:18080/q/p01)"
-          [[ "$activity" == *'长岐村漫游打卡'* ]]
-          [[ "$home" == *'<!doctype html>'* ]]
-          [[ "$guide" == *'参与方式'* ]]
+          assert_contains() {
+            local label="$1" body="$2" expected="$3"
+            if [[ "$body" != *"$expected"* ]]; then
+              echo "smoke assertion failed: $label (expected $expected)"
+              printf '%s\n' "${body:0:500}"
+              exit 1
+            fi
+          }
+          assert_contains activity "$activity" '长岐村漫游打卡'
+          assert_contains home "$home" '<!doctype html>'
+          assert_contains guide "$guide" '参与方式'
           status="$(curl --silent --show-error --output /tmp/changqi-invalid-claim.html --write-out '%{http_code}' http://127.0.0.1:18080/r/not-a-claim)"
           test "$status" = 404
 
