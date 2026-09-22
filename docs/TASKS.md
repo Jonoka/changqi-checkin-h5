@@ -15,7 +15,7 @@
 - 服务器只读核验：`root@100.95.32.56` 可通过 Tailscale 连接；Alibaba Cloud Linux 3.2104 LTS 内核 `5.10.134-18.al8.x86_64`，`x86_64`，约 0.94 GiB RAM，根盘 40G/可用 19G。Nginx 1.26.2、MySQL 服务 active，MySQL 客户端无密码查询被拒绝；配置端口 3306、socket `/tmp/mysql.sock`、数据目录 `/www/server/data`。80/443/3306/3000/3001 等端口已有监听，3000/3001 属于现有 Node 应用；远端 PATH 未发现 Docker/Compose 命令，仅发现宝塔 `bt`。`cq.fsxinhuo.cn` 当前为静态宝塔默认站点，Nginx 没有本项目反代，证书有效期至 2026-12-20；本轮未安装、重启或改动服务器。
 - Windows 工作区已实际核对并开发，保留既有忽略文件、视觉原图压缩包及其他工作区；没有读取或提交真实凭据。A6.1 镜像与 Actions 改动已完成，本地 `npm run check` 41/41、`npm run build` 通过；本机 Docker 引擎未启动，未伪造本地镜像运行结果。生产 MySQL、微信真机和服务器部署仍未验证。
 - A6.3：正式 origin `https://cq.fsxinhuo.cn` 与 p01–p05 绑定已定版；10 张码、清单、约 5cm 离线打印页和警示 ZIP 已生成并自动解码。仍为“正式地址已定，待真机/纸样试扫，不可直接批量印刷。”地址和 A4 视觉不再是外部缺项。
-- 当前接续：A5 本地回归通过、微信真机未验；A6.1 已补齐 schema/建表脚本进镜像、固定已核对的 `linux/amd64`、临时 MySQL 镜像冒烟和归档校验文件。Actions run `35742761304` 在源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc` 上构建、冒烟和导出均通过，但 artifact 上传因 GitHub 存储配额失败，未产生可下载交付包；A6.3 样张和自动解码完成、真实纸样未验；A6.2 仅完成服务器只读核验，未安装 Docker、未配置或更新站点。生产写入、部署和联调授权需按目标继续。
+- 当前接续：A5 本地回归通过、微信真机未验；A6.1 已完成 schema/建表脚本进镜像、`linux/amd64` 固定、临时 MySQL 冒烟、artifact 上传和本地下载核对。成功 run `35750893371` 在源码 `f14430b7039d2a810d13d08098da43f2b8734612` 上通过全部检查并产出可下载 artifact；A6.3 样张和自动解码完成、真实纸样未验；A6.2 已完成服务器只读核验，尚未安装 Docker、配置运行密钥或更新站点。生产写入、部署和联调仍待继续。
 - 公网只读结果：两家公共 DoH 均返回 `112.74.27.188`；HTTPS 证书匹配 `cq.fsxinhuo.cn`、信任校验通过（2026-09-21～2026-12-20 UTC）。HTTP/HTTPS 首页均是“恭喜，站点创建成功！”默认页且未跳转；`/api/activity` 与 `/q/p01`～`/q/p05` 全部 404。域名解析/证书可用不等于项目部署成功，运行版本无法对应验收代码。本轮已只读登录服务器，未生产部署、未改 DNS/证书/公众号、未写正式库。
 
 ## 1. 执行顺序与完成规则
@@ -28,7 +28,7 @@
 | A3 | 两种领取与人数 | A2 | 本地通过待真机 |
 | A4 | 已认可视觉与真实页面状态 | A2、A3 | 本地及用户视觉通过，待真机 |
 | A5 | 必要回归、问题修复 | A1–A4 | 本地通过待真机 |
-| A6 | 双入口构建、本地中转、授权部署与二维码 | 构建/部署依各自授权；纸样不等镜像发布 | 进行中：A6.1 构建/冒烟/导出通过但 artifact 配额失败；A6.2 只读核验，未部署；A6.3 样张/解码完成，微信/纸样待验 |
+| A6 | 双入口构建、本地中转、授权部署与二维码 | 构建/部署依各自授权；纸样不等镜像发布 | 进行中：A6.1 构建/冒烟/导出/下载完成；A6.2 只读核验，待运行密钥与生产变更范围；A6.3 样张/解码完成，微信/纸样待验 |
 
 状态使用“未开始 / 进行中 / 本地通过待真机 / 阻塞 / 完成”。按实际依赖顺序继续，不每个小步骤都要求批准；外部条件缺失只阻塞对应检查，本地可实现部分继续。开发环境模拟与微信真机结果严格分开。
 
@@ -172,7 +172,7 @@
 | AC-10 | 本地通过 | 实际 MySQL 两路重复/12 请求并发只计首次且时间/渠道不覆盖；非法领取码及伪造身份/渠道请求拒绝。 |
 | AC-11 | 本地通过 | 两位实际上传完成的测试游客分别领取后只读 COUNT=2；正确凭据可读，未授权不可读，统计连接失败不显示 0。生产人数尚未验证。 |
 | AC-12 | 本地及用户视觉通过，待真机 | A4 581fb427 的用户视觉已确认；本轮运行时/素材指纹相同，复用原 129 整页+6首屏+3地图证据；所有 320/390/430 实时布局、首屏扫一扫、文案、五处详情与主操作断言再次通过。本轮无视觉改动，不机械重截图；微信真机待验。 |
-| AC-13 | 构建/冒烟通过，artifact 配额阻塞，部署未完成 | 生产禁模拟、开发身份不可转正式、MySQL 会话/照片/领取实际进程重启恢复已回归。Actions run `35742761304` / attempt 1、源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc`：linux/amd64 镜像构建、临时 MySQL schema、`/health`、`/api/activity`、首页、`/q/p01`、无效领取 API 和生产模拟拒绝均通过；镜像内 Node `v24.21.0`、npm `11.19.0`，基础 digest 为 `sha256:5cbc7caba8c2c0f0bca675d1b61b9f2857e1cf1853c6164ee9dd409501a936e7`。导出与 SHA-256 文件生成通过，但 Upload artifact 因 GitHub 存储配额失败；无 artifact、无服务器更新。 |
+| AC-13 | 构建/冒烟/下载通过，部署未完成 | 生产禁模拟、开发身份不可转正式、MySQL 会话/照片/领取实际进程重启恢复已回归。Actions run `35750893371` / attempt 1、源码 `f14430b7039d2a810d13d08098da43f2b8734612`：linux/amd64 镜像构建、临时 MySQL schema、`/health`、`/api/activity`、首页、`/q/p01`、无效领取 API 和生产模拟拒绝均通过；镜像内 Node `v24.21.0`、npm `11.19.0`，基础 digest 为 `sha256:5cbc7caba8c2c0f0bca675d1b61b9f2857e1cf1853c6164ee9dd409501a936e7`。artifact `changqi-image-f14430b7039d-35750893371-1` 已下载到 `tmp/release-35750893371`；镜像归档 SHA-256 为 `e29d9e85c1f0509b46c59bb02c74033c0a9cf18176a224a429fb06af9ddbe929`。服务器尚未安装 Docker、配置运行密钥或更新站点。 |
 | AC-14 | 地址/样张/自动解码完成；微信与纸样未验 | 五个最终网址、10 张 PNG/SVG、清单和待验证 ZIP 已交，10/10 自动回读一致；直接微信扫与 H5 页内扫、两种真实手机及约5cm真实纸样待验，不可批量印刷。 |
 
 可分开写“Actions API 检查已通过；宝塔数据库/微信真机未验证”。本地命令、Actions 日志、服务器结果与真机用户反馈标明来源，不将它们混为一个“全绿”。
@@ -197,8 +197,8 @@ A6.3：tmp/point-qrs-cq-fsxinhuo-cn/ 含 10 张 PNG/SVG、manifest、UTF-8 CSV�
 微信/纸样：实际公众号能力、后台域名/校验文件/出口白名单、运行凭据、菜单、iOS/Android 两类扫码入口、现场照片/领取和约5cm真实纸样尚未验证。当前官方 OAuth/JS-SDK 正文已读取，协议说明不等于账号配置成功；生产 MySQL/Cookie/照片目录和反代仍未实测。
 印刷状态：正式地址已定，待真机/纸样试扫，不可直接批量印刷。文件和自动解码完成不代替真机/纸样；无用户批量印刷批准。
 历史构建：源码 ca5f5b7f08bcaf1133bc162a05a60307747ec379；run 35587927134 / attempt 1；镜像标签 changqi-checkin-h5:ca5f5b7f08bc-35587927134-1；linux/amd64 测试平台，platformVerified=false；当时 artifact 上传额度失败。当前额度未知，未删其他项目产物、未调整付费或忽略上传错误。
-A6.1 本轮：Dockerfile 加入一次性建表所需 schema/脚本，固定 Node 24.21.0 amd64 基础镜像 digest；Actions 平台按服务器实测改为 linux/amd64、platformVerified=true，增加临时 MySQL 的真实镜像启动冒烟、镜像内 Node/npm 版本记录和归档 SHA-256。Windows `npm run check` 41/41、`npm run build`、`git diff --check` 通过；run `35742761304` / attempt 1 在源码 `df4f3edf5698d6af6c4d14cfa2d6d9d11aa99dfc` 上构建/冒烟/导出通过，镜像标签 `changqi-checkin-h5:df4f3edf5698-35742761304-1`；Upload artifact 因 GitHub 配额失败，未取得可下载包。随后按用户授权删除 `Jonoka/formelo-works-website` 的 4 个未过期截图 artifact（约 28.7 MB），删除后该仓库未过期 artifact 为 0；GitHub 配额重新计算尚未验证。
-下一步：等待 GitHub artifact 配额重新计算或由用户提供明确的替代中转授权；不重复触发同一构建、不删除其他产物。产物可下载后，还需取得明确生产变更范围，决定是否在现有 1GB 服务器安装 Docker、选择未占用回环端口、创建本项目目录/库/账号、配置 Nginx 并部署；不能复用现有 3000/3001 或默认站点。之后由用户操作 iOS/Android 微信及真实纸样。
+A6.1 本轮：Dockerfile 加入一次性建表所需 schema/脚本，固定 Node 24.21.0 amd64 基础镜像 digest；Actions 平台按服务器实测改为 linux/amd64、platformVerified=true，增加临时 MySQL 的真实镜像启动冒烟、镜像内 Node/npm 版本记录和归档 SHA-256。Windows `npm run check` 41/41、`npm run build`、`git diff --check` 通过；run `35750893371` / attempt 1 在源码 `f14430b7039d2a810d13d08098da43f2b8734612` 上构建/冒烟/导出/上传通过，artifact `changqi-image-f14430b7039d-35750893371-1` 已下载到 `tmp/release-35750893371`，镜像归档 SHA-256 `e29d9e85c1f0509b46c59bb02c74033c0a9cf18176a224a429fb06af9ddbe929`。
+下一步：在运行密钥与生产变更范围明确后，使用同一 artifact 在现有 1GB 服务器安装 Docker/Compose、选择未占用回环端口、创建本项目目录/库/账号、配置 Nginx 并部署；不能复用现有 3000/3001 或默认站点。之后由用户操作 iOS/Android 微信及真实纸样。
 本轮未执行：服务器安装/生产部署/测试写入、DNS/证书/公众号/菜单/托管修改、artifact 下载、Docker load、Compose 更新。二维码已生成交付待验证样张，不依赖 Actions artifact。
 ```
 
