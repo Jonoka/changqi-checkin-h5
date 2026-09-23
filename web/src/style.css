@@ -87,19 +87,14 @@ button.text-button { min-height: 44px; padding: 6px 0 6px 12px; background: none
 .paper-tag { flex-shrink: 0; border: 1px solid #d4d7b6; background: #f3eed7; color: #78622b; border-radius: 6px; padding: 4px 7px; font-size: 10px; }
 .muted { color: var(--muted); font-size: 12px; }
 .map-caption { color: var(--muted); font-size: 11px; margin-bottom: 12px; }
-.map-canvas { position: relative; isolation: isolate; border: 1px solid #cbd5b7; border-radius: 20px; overflow: hidden; background: #dbe1bd; }
-.map-scenery { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; z-index: 0; }
-.map-route { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-.map-route path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.route-edge { stroke: #f4e9bd; stroke-width: 14; }
-.route-path { stroke: #b79960; stroke-width: 8; }
-.route-dashes { stroke: #f7ecc9; stroke-width: 1.5; stroke-dasharray: 2 7; }
+.map-canvas { position: relative; isolation: isolate; border-radius: 20px; overflow: hidden; background: #dbe1bd; }
+.map-scenery { display: block; width: 100%; height: auto; object-fit: contain; pointer-events: none; }
 .map-points { position: absolute; inset: 0; list-style: none; margin: 0; padding: 0; z-index: 2; }
-.map-points li { position: absolute; width: 43%; transform: translate(-50%,-50%); }
+.map-points li { position: absolute; width: max-content; max-width: 45%; transform: translate(-50%,-50%); }
 .map-point { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0; border: 0; background: transparent; border-radius: 16px; color: var(--forest); }
 .map-point:disabled { background: transparent; opacity: .65; }
 .map-point:hover .map-label { background: #fffdf6; }
-.map-label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; position: relative; margin-top: -9px; padding: 3px 8px 3px 3px; max-width: 100%; border: 1px solid #a79660; background: #fffbedf5; border-radius: 20px; font-size: 13px; line-height: 1.35; box-shadow: 0 3px 7px #314d3020; }
+.map-label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; position: relative; margin-top: 0; padding: 2px 8px 2px 3px; white-space: nowrap; max-width: 100%; border: 1px solid #a79660; background: #fffbedf5; border-radius: 20px; font-size: 13px; line-height: 1.35; box-shadow: 0 3px 7px #314d3020; }
 .map-pin { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #efdda1; font-family: Georgia,serif; font-size: 15px; font-weight: 700; }
 .completed .map-pin { background: var(--forest); color: white; }
 .completed .map-label { border-color: #537a51; }
@@ -129,10 +124,9 @@ button.back-button { color: var(--forest); background: transparent; border: 0; p
 .point-art-frame { display: block; }
 .point-art { display: block; width: 100%; height: auto; object-fit: contain; }
 .art-detail { overflow: hidden; border-radius: 18px; background: #e6ebd5; }
-.art-landmark { width: 100%; mask-image: radial-gradient(ellipse at center,#000 55%,#000 67%,transparent 77%); }
 .art-thumbnail { flex-shrink: 0; width: 48px; overflow: hidden; border-radius: 7px; }
 .art-unavailable { display: grid; place-items: center; width: 100%; aspect-ratio: 3/2; padding: 10px; color: var(--muted); background: var(--leaf); font-size: 12px; text-align: center; }
-.art-thumbnail .art-unavailable, .art-landmark .art-unavailable { padding: 3px; font-size: 10px; }
+.art-thumbnail .art-unavailable { padding: 3px; font-size: 10px; }
 .art-caption { color: var(--muted); font-size: 10px; text-align: right; margin: 3px 0 10px; }
 .scan-notice { font-size: 11px; margin: 3px 0 8px; }
 .photo-panel { padding-top: 4px; overflow-wrap: anywhere; }

@@ -32,9 +32,12 @@ async function fixture(run) {
 test('Raster source extraction: all real crops match the approved originals pixel for pixel, with provenance', async () => {
   const recipe = JSON.parse(await fs.readFile(`${dir}/recipe.json`))
   const manifest = JSON.parse(await fs.readFile(`${dir}/source-manifest.json`))
-  assert.equal(manifest.sourceSha256, hash(await fs.readFile(`${dir}/recipe.json`)))
+  assert.equal(manifest.sourceSha256, recipe.extractionRecipeSha256, 'Historical extraction manifest remains unchanged when independent PNG masters are imported')
   assert.equal(manifest.files.length, recipe.crops.length)
   for (const file of manifest.files) {
+    const crop = recipe.crops.find(entry => file.path.endsWith(`/${entry.id}.png`))
+    assert.deepEqual(file.crop, crop.crop)
+    assert.equal(file.reference, `assets/reference/${crop.reference}`)
     const original = await fs.readFile(file.reference)
     assert.equal(hash(original), file.referenceSha256)
     const actual = await fs.readFile(file.path)
@@ -49,14 +52,52 @@ test('Raster source extraction: all real crops match the approved originals pixe
   assert.doesNotMatch(await fs.readFile('scripts/prepare-a4-art.mjs', 'utf8'), /village-art\.mjs|svgSha256|Buffer\.from\(svg/)
 })
 
-test('Real missing masters block generation before any current runtime artifact changes', async () => {
+test('Missing master registration blocks the entire batch without modifying owned outputs', async () => fixture(async ({ root, recipe, save }) => {
+  const result = await prepareArt({ root })
+  const manifestPath = path.join(root, 'web/public/art/illustration-manifest.json')
+  const before = hash(await fs.readFile(manifestPath))
+  recipe.masters.at(-1).master = null; await save()
+  await assert.rejects(prepareArt({ root }), /Image master gate blocked: p03/)
+  assert.equal(hash(await fs.readFile(manifestPath)), before)
+  for (const file of result.files) assert.equal(hash(await fs.readFile(path.join(root, file.path))), file.sha256)
+}))
+
+test('Missing master file fails before the first output write', async () => fixture(async ({ root, recipe }) => {
+  await fs.unlink(path.join(root, recipe.masters.at(-1).master.path))
+  await assert.rejects(prepareArt({ root }), { code: 'ENOENT' })
+  assert.deepEqual(await fs.readdir(path.join(root, 'web/public/art')), [])
+}))
+
+test('Actual six imported PNGs and WebP derivatives match the inventory, generation provenance and original dimensions', async () => {
   const recipe = JSON.parse(await fs.readFile(`${dir}/recipe.json`))
-  assert.ok(recipe.masters.every(entry => entry.master === null), 'Update this gate test only after actual masters have been visually reviewed')
-  const names = await fs.readdir('web/public/art')
-  const before = new Map(await Promise.all(names.map(async name => [name, hash(await fs.readFile(`web/public/art/${name}`))])))
-  await assert.rejects(prepareArt(), /Image master gate blocked: map, p03, p01, p02, p04, p05/)
-  assert.deepEqual(await fs.readdir('web/public/art'), names)
-  for (const [name, expected] of before) assert.equal(hash(await fs.readFile(`web/public/art/${name}`)), expected)
+  const inventoryBytes = await fs.readFile(recipe.importManifest)
+  assert.equal(hash(inventoryBytes), recipe.importManifestSha256)
+  const imported = JSON.parse(inventoryBytes)
+  const manifest = JSON.parse(await fs.readFile('web/public/art/illustration-manifest.json'))
+  assert.equal(manifest.sourceSha256, hash(await fs.readFile(`${dir}/recipe.json`)))
+  assert.equal(manifest.importManifestSha256, hash(inventoryBytes))
+  assert.equal(imported.files.length, 6); assert.equal(manifest.files.length, 6)
+  for (const input of imported.files) {
+    const entry = recipe.masters.find(entry => entry.id === input.id)
+    const bytes = await fs.readFile(input.path)
+    assert.equal(hash(bytes), input.sha256); assert.equal(bytes.length, input.bytes)
+    const meta = await sharp(bytes).metadata()
+    assert.equal(meta.format, 'png'); assert.equal(meta.width, input.width); assert.equal(meta.height, input.height)
+    assert.equal(entry.master.origin, 'conversation-generated-raster')
+    assert.equal(entry.master.generationId, input.generationId)
+    assert.equal(entry.master.userApproval, input.userApproval)
+    const output = manifest.files.find(file => file.path === entry.output)
+    assert.equal(output.master.sha256, input.sha256)
+    assert.equal(output.master.reviewed, true, 'Technical review, not an additional user approval')
+    assert.equal(Object.hasOwn(output, 'sourceIds'), false, 'Old crops are only visual references, not the source pixels')
+    const derivative = await sharp(bytes).resize({ width: entry.maxWidth, withoutEnlargement: true }).webp({ quality: 86, effort: 5 }).toBuffer()
+    assert.equal(hash(derivative), output.sha256)
+    assert.equal(hash(await fs.readFile(output.path)), output.sha256)
+    assert.ok(output.width <= input.width && output.height <= input.height)
+    assert.ok(Math.abs(output.width / output.height - input.width / input.height) < .001)
+    assert.ok(output.bytes <= entry.maxBytes)
+  }
+  assert.deepEqual(imported.files.filter(file => file.userApproval === 'confirmed-in-conversation').map(file => file.id).sort(), ['map', 'p03'])
 })
 
 test('Reviewed raster masters preserve aspect, do not enlarge, and record actual master hashes', async () => fixture(async ({ root, recipe }) => {
@@ -103,6 +144,18 @@ test('Reference hash changes fail before extraction or runtime writes', async ()
   await fs.writeFile(path.join(root, 'assets/reference/test.png'), 'changed original')
   await assert.rejects(prepareArt({ root, extractSources: true }), /Approved original changed/)
   await assert.rejects(prepareArt({ root }), /Approved original changed/)
+}))
+
+test('Generated PNG provenance cannot bypass a changed import inventory or claim extra approval', async () => fixture(async ({ root, recipe, save }) => {
+  for (const entry of recipe.masters) Object.assign(entry.master, { origin: 'conversation-generated-raster', generationId: `test-${entry.id}`, userApproval: 'integration-preview-only' })
+  recipe.importManifest = `${dir}/masters-import-manifest.json`
+  await writeJson(root, recipe.importManifest, { files: recipe.masters.map(entry => ({ id: entry.id, ...entry.master })) })
+  recipe.importManifestSha256 = hash(await fs.readFile(path.join(root, recipe.importManifest))); await save()
+  await prepareArt({ root })
+  recipe.masters[0].master.userApproval = 'confirmed-in-conversation'; await save()
+  await assert.rejects(prepareArt({ root }), /import inventory and approval boundary/)
+  recipe.masters[0].master.userApproval = 'integration-preview-only'; recipe.importManifestSha256 = '0'.repeat(64); await save()
+  await assert.rejects(prepareArt({ root }), /Import manifest hash changed/)
 }))
 
 test('A disguised SVG master cannot enter the raster pipeline', async () => fixture(async ({ root, recipe, save }) => {

@@ -71,6 +71,12 @@ export async function prepareArt({ root = projectRoot, extractSources = false } 
     }
     return writeOwned(root, `${prefix}source-manifest.json`, outputs, { source: recipePath, sourceSha256: hash(recipeBytes), method: 'Native-pixel PNG crops only; no painting, interpolation, UI removal or runtime adoption. See TASKS for review.' })
   }
+  let imported = null
+  if (recipe.importManifest) {
+    const bytes = await fs.readFile(localPath(root, recipe.importManifest))
+    requireValue(hash(bytes) === recipe.importManifestSha256, 'Import manifest hash changed')
+    imported = JSON.parse(bytes)
+  }
   const missing = recipe.masters.filter(entry => !entry.master || entry.master.reviewed !== true)
   requireValue(missing.length === 0, `Image master gate blocked: ${missing.map(entry => entry.id).join(', ')}. No runtime files written; source crops are not UI-free masters.`)
   const outputs = []
@@ -78,7 +84,12 @@ export async function prepareArt({ root = projectRoot, extractSources = false } 
     const master = entry.master
     requireValue(master.path.startsWith(`${prefix}masters/`) && /\.(png|webp)$/.test(master.path), 'Master must be an independent PNG/WebP under restoration/masters')
     requireValue(typeof master.method === 'string' && master.method.trim().length > 0, 'Record the actual image-editing method')
-    requireValue(entry.sourceIds?.length && entry.sourceIds.every(id => recipe.crops.some(crop => crop.id === id)), 'Master source lineage missing')
+    if (master.origin === 'conversation-generated-raster') {
+      const source = imported?.files?.find(file => file.id === entry.id)
+      requireValue(source && ['path', 'sha256', 'width', 'height', 'generationId', 'userApproval'].every(key => source[key] === master[key]), 'Generated master must match its import inventory and approval boundary')
+    } else {
+      requireValue(entry.sourceIds?.length && entry.sourceIds.every(id => recipe.crops.some(crop => crop.id === id)), 'Master source lineage missing')
+    }
     const bytes = await fs.readFile(localPath(root, master.path))
     requireValue(hash(bytes) === master.sha256, `Master hash changed: ${master.path}`)
     const meta = await raster(bytes, master.path)
@@ -89,10 +100,13 @@ export async function prepareArt({ root = projectRoot, extractSources = false } 
     const data = await sharp(bytes).resize({ width: entry.maxWidth, withoutEnlargement: true }).webp({ quality: 86, effort: 5 }).toBuffer()
     requireValue(data.length <= entry.maxBytes, `Review compression/size instead of silently reducing quality: ${entry.id}`)
     const size = await raster(data, entry.output)
-    outputs.push({ path: entry.output, data, width: size.width, height: size.height, master, sourceIds: entry.sourceIds })
+    outputs.push({ path: entry.output, data, width: size.width, height: size.height, master,
+      ...(entry.sourceIds ? { sourceIds: entry.sourceIds } : { referenceCropIds: entry.referenceCropIds }) })
   }
   requireValue(outputs.reduce((sum, file) => sum + file.data.length, 0) <= 5000000, 'Review total artwork budget')
-  return writeOwned(root, 'web/public/art/illustration-manifest.json', outputs, { source: recipePath, sourceSha256: hash(recipeBytes), method: 'Source-based reviewed raster masters; sharp WebP quality 86, preserve aspect and never enlarge. Model edits are saved masters, not pixel-reproducible generations.' })
+  return writeOwned(root, 'web/public/art/illustration-manifest.json', outputs, { source: recipePath, sourceSha256: hash(recipeBytes),
+    ...(imported ? { importManifest: recipe.importManifest, importManifestSha256: recipe.importManifestSha256 } : {}),
+    method: 'Reviewed saved raster masters; sharp WebP quality 86, preserve aspect and never enlarge. Imported generated PNGs are not historical pixel crops; original bytes and approval boundaries are preserved.' })
 }
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   try {

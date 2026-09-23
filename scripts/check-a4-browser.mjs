@@ -20,12 +20,16 @@ const versionFiles = [
   'web/src/wechat-scan.js',
   'web/src/photo-upload.js',
   'web/src/style.css',
-  'web/public/art/map-environment.webp',
-  'web/public/art/point-p01-gourd.webp',
-  'web/public/art/point-p02-hall.webp',
-  'web/public/art/point-p03-well.webp',
-  'web/public/art/point-p04-banyan.webp',
-  'web/public/art/point-p05-summit.webp'
+  'web/src/map-layout.js',
+  'web/src/ClaimPage.vue',
+  'web/src/ClaimAction.vue',
+  'web/public/art/illustration-manifest.json',
+  'web/public/art/map-restored-v1.webp',
+  'web/public/art/point-p01-restored-v1.webp',
+  'web/public/art/point-p02-restored-v1.webp',
+  'web/public/art/point-p03-restored-v1.webp',
+  'web/public/art/point-p04-restored-v1.webp',
+  'web/public/art/point-p05-restored-v1.webp'
 ]
 
 async function runtimeVersion() {
@@ -50,7 +54,7 @@ function escapeHtml(value) {
 function gallery(records, version) {
   const currentMap = records.find((record) => record.state === 'home' && record.width === 390)?.mapFile
   const cards = records.map((record) => `<figure><a href="${escapeHtml(record.file)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(record.file)}" alt="${escapeHtml(record.state)} ${record.width}px" loading="lazy"></a><figcaption><strong>${escapeHtml(record.state)}</strong> · ${record.width}px<br><small>${escapeHtml(record.capturedAt)}</small></figcaption></figure>`).join('')
-  const comparison = currentMap ? `<h2>原参考地图 / 本轮实际地图</h2><div class="comparison"><figure><a href="../../assets/reference/map.png" target="_blank"><img src="../../assets/reference/map.png" alt="原地图视觉参考"></a><figcaption>assets/reference/map.png · 原图未修改</figcaption></figure><figure><a href="${escapeHtml(currentMap)}" target="_blank"><img src="${escapeHtml(currentMap)}" alt="本轮实际首页地图"></a><figcaption>本轮 390px 实际渲染地图</figcaption></figure></div>` : ''
+  const comparison = currentMap ? `<h2>原参考图 / 已确认地图母版 / 实际页面</h2><div class="comparison"><figure><a href="../../assets/reference/map.png" target="_blank"><img src="../../assets/reference/map.png" alt="原地图视觉参考"></a><figcaption>assets/reference/map.png · 原图未修改</figcaption></figure><figure><a href="../../assets/illustrations/restoration/masters/map-master-v1.png"><img src="../../assets/illustrations/restoration/masters/map-master-v1.png" alt="用户确认的独立 PNG 地图母版"></a><figcaption>已确认独立 PNG 母版 · 非旧图逐像素裁切</figcaption></figure><figure><a href="${escapeHtml(currentMap)}" target="_blank"><img src="${escapeHtml(currentMap)}" alt="本轮实际首页地图"></a><figcaption>本轮 390px 实际渲染地图</figcaption></figure></div>` : ''
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A4 本地视觉复核</title><style>
 body{margin:0;padding:24px;background:#f2f1e8;color:#254533;font:15px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1280px;margin:auto}h1,h2{line-height:1.3}code{overflow-wrap:anywhere}.meta{padding:14px 18px;background:#fff;border:1px solid #d6ddce;border-radius:12px}.comparison,.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;align-items:start}.comparison{max-width:920px}.grid figure,.comparison figure{margin:0;padding:10px;background:#fff;border:1px solid #d6ddce;border-radius:12px}.grid img,.comparison img{display:block;width:100%;height:auto}figcaption{padding:9px 3px 2px}small{color:#667568}@media(max-width:600px){body{padding:12px}}
 </style></head><body><main><h1>长岐村 A4 本地视觉复核</h1><p>截图来自隔离 MySQL + 本机 Chrome。微信 SDK、微信网络及故障注入为模拟，不是真机验收。</p><div class="meta">分支：<code>${escapeHtml(version.branch)}</code><br>截图基准 HEAD：<code>${escapeHtml(version.head)}</code><br>运行时源码/素材指纹：<code>${escapeHtml(version.runtimeSha256)}</code><br><a href="a4-screenshots.json">查看截图元数据</a></div>${comparison}<h2>实际页面状态</h2><div class="grid">${cards}</div></main></body></html>`
@@ -97,8 +101,10 @@ export function createA4Capture({ call, evaluate, directory }) {
       const viewportHeight = homeAction ? 568 : width === 320 ? 740 : 844
       await call('Emulation.setDeviceMetricsOverride', { width, height: viewportHeight, deviceScaleFactor: 1, mobile: true })
       await evaluate('window.scrollTo(0, 0)')
-      await evaluate(`[...document.querySelectorAll('img[loading="lazy"]')].forEach(image => image.loading = 'eager')`)
-      await evaluate(`document.fonts.ready.then(() => Promise.all([...document.images].map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.addEventListener('load', resolve, {once:true}); image.addEventListener('error', resolve, {once:true}); setTimeout(resolve, 2000) }))))`)
+      // Folded-list images are intentionally lazy; require pixels only when their section is visible.
+      // Expanded-list captures still require every configured thumbnail to decode successfully.
+      await evaluate(`[...document.querySelectorAll('img[loading="lazy"]')].filter(image => image.checkVisibility()).forEach(image => image.loading = 'eager')`)
+      await evaluate(`document.fonts.ready.then(() => Promise.all([...document.images].filter(image => image.checkVisibility()).map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.addEventListener('load', resolve, {once:true}); image.addEventListener('error', resolve, {once:true}); setTimeout(resolve, 5000) }))))`)
       assert.equal(await evaluate('document.documentElement.scrollWidth'), width, `${name}: no horizontal overflow at ${width}px`)
       if (await evaluate('Boolean(document.querySelector(".village-map, .point-detail"))')) {
         assert.doesNotMatch(await evaluate('document.body.innerText'), /CQ\d+/, `${name}: visitor number is absent from home and all point states`)
@@ -135,21 +141,46 @@ export function createA4Capture({ call, evaluate, directory }) {
           await fs.writeFile(path.join(directory, viewportFile), Buffer.from(firstScreen.data, 'base64'))
         }
       }
-      assert.deepEqual(await evaluate(`[...document.querySelectorAll('img[src^="/art/"], img.claim-qr, img.saved-photo')].filter(image => !image.complete || image.naturalWidth === 0).map(image => image.className)`), [], `${name}: required artwork/QR/saved images loaded`)
+      assert.deepEqual(await evaluate(`[...document.querySelectorAll('img[src^="/art/"], img.claim-qr, img.saved-photo')].filter(image => image.checkVisibility() && (!image.complete || image.naturalWidth === 0)).map(image => image.className)`), [], `${name}: required artwork/QR/saved images loaded`)
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('button')].filter(button => button.getClientRects().length && button.getBoundingClientRect().height < 43).map(button => button.textContent.trim())`), [], `${name}: visible buttons have touch-sized targets`)
 
       const alignment = await evaluate(`(() => {
-        const svg=document.querySelector('.map-route'); if(!svg) return [];
-        const s=svg.getBoundingClientRect(), vb=svg.viewBox.baseVal, bad=[];
-        for(const li of document.querySelectorAll('.map-points li')){
-          const button=li.querySelector('.map-point'), r=li.getBoundingClientRect();
-          const x=s.left+Number(button.dataset.mapX)/vb.width*s.width;
-          const y=s.top+Number(button.dataset.mapY)/vb.height*s.height;
-          if(Math.abs((r.left+r.width/2)-x)>1.5 || Math.abs((r.top+r.height/2)-y)>1.5) bad.push(button.dataset.pointKey);
+        const canvas=document.querySelector('.map-canvas'); if(!canvas) return [];
+        const image=canvas.querySelector('.map-scenery'), bad=[];
+        if(!image || !image.naturalWidth) return ['missing-map-image'];
+        const s=image.getBoundingClientRect(), c=canvas.getBoundingClientRect();
+        if(canvas.querySelector('svg, .point-art')) bad.push('duplicate-vector-or-landmark');
+        if(Math.abs(s.width/s.height-image.naturalWidth/image.naturalHeight)>.002) bad.push('image-stretched');
+        if(Math.abs(c.width-s.width)>1 || Math.abs(c.height-s.height)>1 || Math.abs(c.left-s.left)>1 || Math.abs(c.top-s.top)>1) bad.push('image-container-mismatch');
+        const buttons=[...canvas.querySelectorAll('.map-point')];
+        for(const button of buttons){
+          const r=button.getBoundingClientRect();
+          const x=s.left+Number(button.dataset.mapX)/100*s.width;
+          const y=s.top+Number(button.dataset.mapY)/100*s.height;
+          if(Math.abs((r.left+r.width/2)-x)>1.5 || Math.abs((r.top+r.height/2)-y)>1.5) bad.push(button.dataset.pointKey+'-alignment');
+          if(r.left<s.left || r.right>s.right || r.top<s.top || r.bottom>s.bottom) bad.push(button.dataset.pointKey+'-outside');
+          for(const other of buttons){
+            if(other===button) continue;
+            const o=other.getBoundingClientRect();
+            if(Math.min(r.right,o.right)-Math.max(r.left,o.left)>1 && Math.min(r.bottom,o.bottom)-Math.max(r.top,o.top)>1) bad.push(button.dataset.pointKey+'-overlap');
+          }
         }
         return bad;
       })()`)
-      assert.deepEqual(alignment, [], `${name}: route, landmark and click target use the same coordinate system at ${width}px`)
+      assert.deepEqual(alignment, [], `${name}: raster image and distinct HTML hotspots share undistorted coordinates at ${width}px`)
+
+      const detailGeometry = await evaluate(`(() => {
+        const image=document.querySelector('.art-detail img'); if(!image) return null;
+        const r=image.getBoundingClientRect(), picker=document.querySelector('.photo-picker:not(.has-selection) .upload-label');
+        const p=picker?.getBoundingClientRect();
+        return { ratio:r.width/r.height, naturalRatio:image.naturalWidth/image.naturalHeight, pickerBottom:p?.bottom ?? null, height:innerHeight };
+      })()`)
+      if (detailGeometry) {
+        assert.ok(Math.abs(detailGeometry.ratio - detailGeometry.naturalRatio) < .002, `${name}: detail artwork preserves its native aspect`)
+        if (name.startsWith('point-') && name.endsWith('-scan-ready')) {
+          assert.ok(detailGeometry.pickerBottom !== null && detailGeometry.pickerBottom <= detailGeometry.height, `${name}: upload selection stays visible without deep scrolling: ${JSON.stringify(detailGeometry)}`)
+        }
+      }
 
       checkedStates.set(`${name}-${width}`, { state: name, width, viewportHeight, firstScreenAction: firstScreenScan, checkedAt: new Date().toISOString(), captured: takeScreenshot })
       if (!takeScreenshot) continue
@@ -161,7 +192,7 @@ export function createA4Capture({ call, evaluate, directory }) {
       await fs.writeFile(path.join(directory, filename), Buffer.from(screenshot.data, 'base64'))
 
       let mapFile = null
-      if (name === 'home' && !process.env.TEST_A4_CAPTURE) {
+      if (name === 'home') {
         const box = await evaluate(`(() => { const r=document.querySelector('.village-map')?.getBoundingClientRect(); return r ? {x:Math.floor(r.left+scrollX),y:Math.floor(r.top+scrollY),width:Math.ceil(r.width),height:Math.ceil(r.height),scale:1} : null })()`)
         if (box) {
           const cropped = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: box })
@@ -308,6 +339,22 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     await capture('home-expanded')
     await pointerClick({ call, evaluate }, '.point-disclosure > summary')
 
+    // Actual pointer hit tests for every configured map AND list entry at all target widths.
+    for (const width of [320, 390, 430]) {
+      await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
+      for (const kind of ['map-point', 'point-button']) for (const point of originalPoints) {
+        if (kind === 'point-button') await evaluate(`document.querySelector('.point-disclosure').open = true`)
+        await pointerClick({ call, evaluate }, `.${kind}[data-point-key="${point.key}"]`)
+        await waitFor(`document.querySelector('.point-detail')?.dataset.pointKey === ${JSON.stringify(point.key)}`, `${width}px ${kind} routes to ${point.key}`)
+        assert.equal(await evaluate(`document.querySelector('.art-detail img')?.getAttribute('src')`), point.image)
+        assert.equal(await evaluate(`document.querySelector('.point-heading h2')?.textContent`), point.name)
+        assert.equal(await evaluate(`Boolean(document.querySelector('input[type=file]'))`), false, 'Viewing a hotspot/list entry never grants scanning eligibility')
+        await pointerClick({ call, evaluate }, '.back-button')
+        await waitFor(`Boolean(document.querySelector('.village-map'))`, 'return after actual pointer click')
+      }
+      await evaluate(`document.querySelector('.point-disclosure').open = false`)
+    }
+
     for (const point of originalPoints) {
       await pointerClick({ call, evaluate }, `.map-point[data-point-key="${point.key}"]`)
       await waitFor(`document.querySelector('.point-detail')?.dataset.pointKey === ${JSON.stringify(point.key)}`, `view ${point.key}`)
@@ -347,23 +394,29 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
       await waitFor('document.querySelector(".village-map")', 'map after point switch')
     }
 
-    // Reorder/add/remove points at runtime: N, fallback placement and completed state stay key-driven.
+    // Reorder/add/remove: N stays dynamic; new unanchored locations use the folded list, never a fake landmark.
     await setCookie(progressCookie)
     activity.points = [
       { key: 'a4-added', name: '配置新增地点', image: null, imageAlt: '配置新增地点插画', photoTip: '测试新增地点拍照提示', displayOrder: 1 },
       ...[...originalPoints].reverse().map((point, index) => ({ ...point, displayOrder: index + 2 }))
     ]
     await call('Page.navigate', { url: origin })
-    await waitFor(`document.querySelectorAll('.map-point').length === ${activity.points.length} && document.querySelector('.point-count')`, 'dynamic N=6')
-    assert.equal(await evaluate('document.querySelector(".map-canvas").dataset.placement'), 'fallback')
+    await waitFor(`document.querySelectorAll('.map-point').length === ${originalPoints.length} && document.querySelector('.point-count')?.textContent.trim().endsWith('/6')`, 'dynamic N=6, only existing anchors')
+    assert.equal(await evaluate('document.querySelector(".map-canvas").dataset.placement'), 'configured')
+    for (const point of originalPoints) {
+      assert.deepEqual(await evaluate(`(() => { const b=document.querySelector('.map-point[data-point-key="${point.key}"]'); return {x:Number(b.dataset.mapX),y:Number(b.dataset.mapY)} })()`), point.mapPosition)
+    }
     const completed = await evaluate(`[...document.querySelectorAll('.map-points li.completed .map-point')].map(button=>button.dataset.pointKey).sort()`)
     assert.deepEqual(completed, ['p01', 'p02'])
-    assert.equal(await evaluate(`document.querySelector('.map-point[data-point-key="a4-added"]').closest('li').classList.contains('completed')`), false)
+    assert.equal(await evaluate(`Boolean(document.querySelector('.map-point[data-point-key="a4-added"]'))`), false, 'No invented anchor for the added location')
     assert.equal(await evaluate('document.querySelector(".point-disclosure").open'), false)
     await capture('configuration-reordered-n6')
     await pointerClick({ call, evaluate }, '.point-disclosure > summary')
     assert.deepEqual(await evaluate(`[...document.querySelectorAll('.point-status.done')].map(node=>node.closest('.point-button').dataset.pointKey).sort()`), ['p01', 'p02'])
     await capture('configuration-list-n6')
+    await pointerClick({ call, evaluate }, '.point-button[data-point-key="a4-added"]')
+    await waitFor(`document.querySelector('.point-detail')?.dataset.pointKey === 'a4-added'`, 'unanchored location remains accessible through the list')
+    assert.equal(await evaluate(`Boolean(document.querySelector('.art-detail img, input[type=file]'))`), false, 'No incorrect image or upload eligibility for the unanchored point')
 
     activity.points = originalPoints.filter((point) => point.key !== 'p03').map((point, index) => ({ ...point, displayOrder: index + 1 }))
     await call('Page.navigate', { url: origin })

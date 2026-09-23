@@ -1,20 +1,15 @@
-// Layout only: identity, artwork and completion always come from each point's key/config.
+// Artwork geometry only, never a second location list or a source of progress.
+export const mapArtwork = Object.freeze({ image: '/art/map-restored-v1.webp', width: 1334, height: 1179 })
+
 export function villageMapLayout(points) {
-  const width = 360
-  const height = Math.max(620, points.length * 112 + 60)
-  const manual = points.every(point => Number.isFinite(point.mapPosition?.x) && Number.isFinite(point.mapPosition?.y))
-  const nodes = points.map((point, index) => {
-    // If a new point has no manual position, lay out the entire set on a simple alternating trail.
-    // Fixed vertical spacing and two separated columns avoid collisions with existing manual pins.
-    const x = manual ? point.mapPosition.x / 100 * width : width * (points.length === 1 ? .5 : index % 2 ? .73 : .27)
-    const y = manual ? point.mapPosition.y / 100 * height : points.length === 1 ? height / 2 : height - 90 - index * ((height - 180) / (points.length - 1))
-    return { point, x, y }
-  })
-  const route = nodes.map((node, index) => {
-    if (!index) return `M ${node.x} ${node.y}`
-    const previous = nodes[index - 1]
-    const middle = (previous.y + node.y) / 2
-    return `C ${previous.x} ${middle}, ${node.x} ${middle}, ${node.x} ${node.y}`
-  }).join(' ')
-  return { width, height, nodes, route, placement: manual ? 'configured' : 'fallback' }
+  const nodes = [], unmappedKeys = []
+  for (const point of points) {
+    const { x, y } = point.mapPosition || {}
+    if (Number.isFinite(x) && x >= 15 && x <= 85 && Number.isFinite(y) && y >= 12 && y <= 88) {
+      nodes.push({ point, x, y }) // Percentages in the image's own relative container.
+    } else {
+      unmappedKeys.push(point.key) // The existing folded list remains the access path.
+    }
+  }
+  return { ...mapArtwork, nodes, unmappedKeys, placement: 'configured' }
 }

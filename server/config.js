@@ -46,6 +46,11 @@ export function validateActivityConfig(config) {
     optionalArtwork(point.image, `points[${index}].image`)
     optionalCopy(point.imageAlt, `points[${index}].imageAlt`)
     optionalCopy(point.photoTip, `points[${index}].photoTip`)
+    if (point.imageWidth !== undefined || point.imageHeight !== undefined) {
+      if (![point.imageWidth, point.imageHeight].every(value => Number.isInteger(value) && value > 0 && value <= 16000)) {
+        throw new Error(`points[${index}].imageWidth/imageHeight must be paired positive pixel dimensions`)
+      }
+    }
     if (point.imagePosition !== undefined && (typeof point.imagePosition !== 'string' || !/^(?:100|[1-9]?\d)% (?:100|[1-9]?\d)%$/.test(point.imagePosition))) {
       throw new Error(`points[${index}].imagePosition must contain two 0–100% values`)
     }
