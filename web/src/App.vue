@@ -40,7 +40,7 @@ const pointNotice = computed(() => {
   if (uploadBusy.value || photoUncertain.value) return ''
   return scannedKey.value === selectedPoint.value.key
     ? '请上传本站的现场照片，完成打卡。'
-    : '到达现场后，请使用页面内扫一扫识别地点。'
+    : '到达现场后，请使用微信扫一扫或页面内扫一扫识别地点。'
 })
 const routeError = ref('')
 // These are separate rendered views, not stacked home/detail panels with scroll-to navigation.
@@ -54,7 +54,12 @@ let identityBusy = false
 let stateRevision = 0
 function updateMe(state) {
   stateRevision++
-  if (me.value && state.userLabel !== me.value.userLabel) { scannedKey.value = ''; scanNotice.value = '' }
+  const sameUser = me.value?.userLabel === state.userLabel
+  if (!sameUser) { scannedKey.value = ''; scanNotice.value = '' }
+  // Only /api/me carries authoritative session eligibility. Mutation responses may omit it.
+  if (Object.hasOwn(state, 'scannedPointKey')) {
+    scannedKey.value = activity.value?.enabled && activity.value.points.some(point => point.key === state.scannedPointKey) ? state.scannedPointKey : ''
+  }
   me.value = state
 }
 function setUploadBusy(value) {
@@ -80,6 +85,7 @@ function loginFailure(cause) {
 
 function showScannedPoint(result) {
   if (operationLocked.value) return
+  stateRevision++ // An older /api/me response must not replace this later scan's eligibility.
   claimView.value = false
   scannedKey.value = result.point.key
   selectedKey.value = result.point.key
@@ -156,6 +162,11 @@ function tryAutomaticLogin() {
 }
 
 async function loadMe(automatic = false) {
+  if (!inWechat && !activity.value?.developmentDemo) {
+    // Guest environment routing is not authentication; never load a stale identity outside WeChat.
+    me.value = null; scannedKey.value = ''; identityState.value = 'outside'
+    return
+  }
   if (identityBusy || demoBusy.value || operationLocked.value) return
   identityBusy = true
   const revision = stateRevision
@@ -167,7 +178,8 @@ async function loadMe(automatic = false) {
     updateMe(state)
     identityState.value = 'ready'
     try { sessionStorage.removeItem('changqi.oauth-attempt') } catch { /* No stored identity. */ }
-    if (inWechat && !activity.value.developmentDemo && scannerState.phase === 'idle') await scanner.initialize()
+    // SDK readiness is independent of identity/native upload. Never await it in this state read.
+    if (inWechat && !activity.value.developmentDemo && scannerState.phase === 'idle') void scanner.initialize()
   } catch (cause) {
     if (revision !== stateRevision || uploadBusy.value) return
     me.value = null
@@ -249,7 +261,7 @@ onUnmounted(() => {
       <div class="page-content">
         <nav v-if="selectedPoint || claimView" class="detail-nav" aria-label="返回活动地图"><button type="button" class="back-button" :disabled="operationLocked" @click="backHome"><span aria-hidden="true">←</span> 返回地图</button><span>长岐漫游手记</span></nav>
         <p v-if="activity.developmentDemo" class="notice demo-label"><strong>开发演示</strong> · 模拟身份与扫码，非微信真机</p>
-        <p v-else-if="!inWechat" class="notice browser-notice">请在微信内打开活动。当前仅可查看地点。</p>
+        <p v-else-if="!inWechat" class="notice browser-notice">请在微信内打开活动。{{ activity.wechat.guideText }}</p>
         <p v-if="!activity.enabled" class="notice" role="status">活动暂未开放或已结束。已有进度仍可查看。</p>
 
         <section v-if="selectedPoint" class="point-detail" aria-live="polite" :data-point-key="selectedPoint.key">
@@ -298,7 +310,7 @@ onUnmounted(() => {
               </li>
             </ul>
           </details>
-          <details class="rules-card"><summary>活动规则</summary><p>从“{{ activity.wechat.officialAccountName }}”公众号菜单进入活动，在现场使用页面内扫一扫识别地点码，再上传现场照片。所有地点完成后，可前往现场领取礼品。</p><p>不限打卡顺序。照片仅用于本次活动记录，不公开展示；领取处以现场指引为准。</p></details>
+          <details class="rules-card"><summary>活动规则</summary><p>{{ activity.wechat.guideText }}所有地点完成后，可前往现场领取礼品。</p><p>不限打卡顺序。照片仅用于本次活动记录，不公开展示；领取处以现场指引为准。</p></details>
         </template>
 
         <details v-if="activity.developmentDemo" class="demo-tools"><summary>开发演示身份切换</summary><div class="demo-controls"><button type="button" :disabled="demoBusy || operationLocked" @click="demoLogin('visitor-a')">演示游客 A</button><button type="button" :disabled="demoBusy || operationLocked" @click="demoLogin('visitor-b')">演示游客 B</button></div></details>

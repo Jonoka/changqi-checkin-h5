@@ -36,7 +36,7 @@ export function safeReturnTo(value, publicOrigin) {
     throw new HttpError(400, 'INVALID_RETURN', '授权返回地址必须在本活动内')
   }
   const url = applicationUrl(`${publicOrigin}${value}`, publicOrigin)
-  if (/^\/(auth|api)(\/|$)/.test(url.pathname)) throw new HttpError(400, 'INVALID_RETURN', '不能返回授权或接口地址')
+  if (/^\/(auth|api|q)(\/|$)/i.test(url.pathname)) throw new HttpError(400, 'INVALID_RETURN', '不能返回授权或接口地址')
   return `${url.pathname}${url.search}${url.hash}`
 }
 

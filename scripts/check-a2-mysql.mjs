@@ -87,7 +87,7 @@ export async function checkA2Mysql({ pool, activity, runtime, baseUrl, directory
   await checkError(uploadFile(baseUrl, a, 'p01', jpeg, { extra: String(bUser.id) }), 400, 'INVALID_UPLOAD')
   await checkError(uploadFile(baseUrl, a, 'p01', jpeg, { headers: { origin: 'https://other.invalid' } }), 403, 'INVALID_ORIGIN')
   assert.equal((await progress(a)).completedCount, 0)
-  ok('A2: upload/photo APIs require sessions; direct /q, unscanned/wrong point, extra identity and cross-origin submissions never grant a check-in')
+  ok('A2: upload/photo APIs require sessions; non-WeChat /q, unscanned/wrong point, extra identity and cross-origin submissions never grant a check-in')
 
   const beforeInvalid = await files(runtime.uploadDir)
   await checkError(uploadFile(baseUrl, a, 'p01', Buffer.alloc(maxPhotoBytes + 1)), 413, 'IMAGE_TOO_LARGE')

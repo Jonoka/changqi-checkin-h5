@@ -22,13 +22,13 @@ export function pageShell({ title, content, code = '', demo = false, illustratio
 </style></head><body><main data-error-code="${escapeHtml(code)}"><div class="brand"><span class="seal" aria-hidden="true">岐</span>长岐漫游手记</div>${demo ? '<p class="notice">开发演示 · 非真实微信或现场派发结果</p>' : ''}<h1>${escapeHtml(title)}</h1>${illustration ? '<img class="art" src="/art/map-environment.webp" alt="" aria-hidden="true" width="720" height="1240">' : ''}${content}<footer class="page-footer">一程慢游，一份长岐记忆</footer></main></body></html>`
 }
 
-export function sendPage(response, { status = 200, title, message, code = '', demo = false, retry = false, guide = false, officialAccountName = '印象芦苞', officialAccountQr = null, activityName = '长岐村漫游打卡' }) {
+export function sendPage(response, { status = 200, title, message, code = '', demo = false, retry = false, retryTo = '/auth/wechat', guide = false, officialAccountName = '印象芦苞', officialAccountQr = null, activityName = '长岐村漫游打卡' }) {
   response.set('Cache-Control', 'no-store')
   const validQr = typeof officialAccountQr === 'string' && /^\/art\/[A-Za-z0-9][A-Za-z0-9._/-]*\.(?:webp|png|jpe?g|svg)$/i.test(officialAccountQr) && !officialAccountQr.includes('..')
   const account = escapeHtml(officialAccountName)
-  const steps = guide ? `<ol class="guide-steps"><li>在微信中搜索并打开公众号“<strong>${account}</strong>”</li><li>关注后，从公众号底部菜单进入“${escapeHtml(activityName)}”；已关注用户可直接从菜单进入</li><li>使用活动页面内的扫一扫，再上传现场照片</li></ol>` : ''
+  const steps = guide ? `<ol class="guide-steps"><li>使用微信扫一扫现场地点二维码，打开对应地点</li><li>身份识别成功后上传现场照片，保存成功才完成打卡</li><li>也可从“<strong>${account}</strong>”公众号进入“${escapeHtml(activityName)}”，使用页面内扫一扫</li></ol>` : ''
   // Only a configured real asset is shown. No generated placeholder QR or unverified follow URL.
   const qr = guide && validQr ? `<img class="guide-qr" src="${escapeHtml(officialAccountQr)}" alt="${account}公众号二维码" width="240" height="240">` : ''
-  const content = `<section class="paper"><p${status >= 400 ? ' role="alert"' : ''}>${escapeHtml(message)}</p>${steps}${qr}</section>${retry ? '<a href="/auth/wechat">重新授权</a><a href="/?authError=1">返回活动页</a>' : ''}${guide ? '<p class="footnote">打开本页不会记录打卡，也不会取得扫码资格；不读取关注状态。插画为概念示意。</p>' : ''}`
+  const content = `<section class="paper"><p${status >= 400 ? ' role="alert"' : ''}>${escapeHtml(message)}</p>${steps}${qr}</section>${retry ? `<a href="${escapeHtml(/^\/q\/[A-Za-z0-9_-]{1,32}$/.test(retryTo) ? retryTo : '/auth/wechat')}">重新授权</a><p class="footnote">请手动重试识别；若仍失败，请确认微信允许此网站保存 Cookie。不会自动重复跳转。</p>` : ''}${guide ? '<p class="footnote">打开本页不会记录打卡，也不会取得扫码资格；不读取关注状态。插画为概念示意。</p>' : ''}`
   return response.status(status).type('html').send(pageShell({ title, content, code, demo, illustration: guide }))
 }

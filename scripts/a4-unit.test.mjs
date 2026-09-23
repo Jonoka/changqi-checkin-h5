@@ -41,13 +41,13 @@ function renderPage(options) {
   return sendPage(response, options)
 }
 
-test('A4: all valid location guides use the participation title without granting scan eligibility', () => {
+test('A4: non-WeChat location guides use the participation title without granting eligibility', () => {
   const activity = loadActivityConfig()
   let handler
   mountGuide({ get(route, callback) { assert.equal(route, '/q/:pointKey'); handler = callback } }, activity, { mockEnabled: false })
   for (const point of activity.points) {
-    const response = { headers: {}, set(name, value) { this.headers[name] = value; return this }, status(code) { this.statusCode = code; return this }, type() { return this }, send(html) { this.html = html; return this } }
-    handler({ params: { pointKey: point.key } }, response)
+    const response = { headers: {}, set(name, value) { if (typeof name === 'object') Object.assign(this.headers, name); else this.headers[name] = value; return this }, vary(name) { this.headers.Vary = name; return this }, status(code) { this.statusCode = code; return this }, type() { return this }, send(html) { this.html = html; return this } }
+    handler({ params: { pointKey: point.key }, get: () => 'ordinary browser' }, response)
     assert.equal(response.statusCode, 200)
     assert.equal(response.headers['Cache-Control'], 'no-store')
     assert.match(response.html, /<title>参与方式<\/title>/)
@@ -83,7 +83,7 @@ test('A4: standalone guide escapes content, has no fake QR or direct upload/auth
   assert.ok(page.html.includes('&lt;script&gt;'))
   assert.ok(page.html.includes('&lt;img src=x onerror=bad()&gt;'))
   assert.doesNotMatch(page.html, /<script>|<img src=x|href="\/auth|type="file"|claim-qr/)
-  assert.match(page.html, /公众号底部菜单|活动页面内的扫一扫/)
+  assert.match(page.html, /使用微信扫一扫现场地点二维码/)
 })
 
 test('A4: authorization error keeps its status and explicit retry, not an automatic redirect or success', () => {
@@ -205,11 +205,12 @@ test('A4: variable N never stretches the image or invents anchors for unposition
   assert.equal(removed.width / removed.height, mapArtwork.width / mapArtwork.height)
 })
 
-test('A4: guide uses account-name search and never generates a placeholder official-account QR', () => {
-  const without = renderPage({ title: '地点引导', message: '请从菜单进入', guide: true })
-  assert.match(without.html, /搜索并打开公众号/); assert.match(without.html, /印象芦苞/); assert.match(without.html, /底部菜单/)
+test('A4: guide offers direct WeChat scanning and optional account entry without a placeholder QR', () => {
+  const without = renderPage({ title: '地点引导', message: '请使用微信打开', guide: true })
+  assert.match(without.html, /使用微信扫一扫现场地点二维码/); assert.match(without.html, /印象芦苞/); assert.match(without.html, /也可从/)
+  assert.doesNotMatch(without.html, /关注后|已关注用户|底部菜单/)
   assert.doesNotMatch(without.html, /<img[^>]+class="guide-qr"/)
-  const supplied = renderPage({ title: '地点引导', message: '请从菜单进入', guide: true, officialAccountQr: '/art/verified-account-qr.png' })
+  const supplied = renderPage({ title: '地点引导', message: '请使用微信打开', guide: true, officialAccountQr: '/art/verified-account-qr.png' })
   assert.ok(supplied.html.includes('<img class="guide-qr" src="/art/verified-account-qr.png"'))
   const rejected = renderPage({ title: '地点引导', message: '', guide: true, officialAccountQr: 'https://invalid.test/qr.png' })
   assert.doesNotMatch(rejected.html, /<img[^>]+class="guide-qr"/)

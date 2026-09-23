@@ -184,11 +184,13 @@ export async function checkA3Restart({ start, stop, browser, pool, activity, dir
   }
   const result = await client.request('/api/me/claim', { body: {} })
   assert.equal(result.status, 200); assert.ok(result.payload.data.claimedAt)
+  const beforeRestartState = (await client.request('/api/me')).payload.data
+  assert.equal(Object.hasOwn(result.payload.data, 'scannedPointKey'), false, 'claim responses need not carry session eligibility')
   const user = await findOrCreateUser(pool, 'development:visitor-a')
   const before = (await pool.execute('SELECT claimed_at, claim_source FROM users WHERE id = ?', [user.id]))[0][0]
   await stop(); origin = await start()
   const restored = browser(origin); restored.cookie = client.cookie
-  assert.deepEqual((await restored.request('/api/me')).payload.data, result.payload.data)
+  assert.deepEqual((await restored.request('/api/me')).payload.data, beforeRestartState)
   assert.equal((await browser(origin).request(`/api/r/${user.claim_code}`)).payload.data.claimedAt, result.payload.data.claimedAt)
   await restored.request('/api/me/claim', { body: {} })
   assert.deepEqual((await pool.execute('SELECT claimed_at, claim_source FROM users WHERE id = ?', [user.id]))[0][0], before)

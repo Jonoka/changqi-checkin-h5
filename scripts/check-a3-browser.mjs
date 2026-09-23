@@ -7,7 +7,10 @@ import sharp from 'sharp'
 // Reuse the existing Chrome connection. WeChat stays simulated; claims/COUNT use real MySQL.
 export async function checkA3Browser({ call, evaluate, click, waitFor, ready, buttonExpression, origin, directory,
   selfCookie, staffCookie, incompleteCookie, selfUrl, staffUrl, credential, assertUiClaim, countClaimed, activity, capture = async () => {} }) {
-  const setCookie = (cookie) => call('Network.setCookie', { name: 'changqi.sid', value: cookie.slice('changqi.sid='.length), url: origin, httpOnly: true, sameSite: 'Lax' })
+  const setCookie = async (cookie) => {
+    await call('Emulation.setUserAgentOverride', { userAgent: 'MicroMessenger/8.0 A3 SIMULATED visitor entry' })
+    await call('Network.setCookie', { name: 'changqi.sid', value: cookie.slice('changqi.sid='.length), url: origin, httpOnly: true, sameSite: 'Lax' })
+  }
   const claimed = () => waitFor('document.querySelector(".claimed-status")', 'server-confirmed claim display')
   const locked = (label) => evaluate(`${buttonExpression(label)}.disabled`)
   const before = await countClaimed()

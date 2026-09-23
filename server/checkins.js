@@ -57,7 +57,7 @@ export function mountCheckins(app, { pool, runtime, activityConfig }) {
       if (await findCheckin(pool, request.currentUser.id, pointKey)) {
         return await userProgress(pool, request.currentUser, activityConfig, runtime.publicOrigin)
       }
-      if (request.session.scannedPointKey !== pointKey) throw new HttpError(403, 'PLEASE_SCAN', '请先使用活动页面内的扫一扫识别该地点')
+      if (request.session.scannedPointKey !== pointKey) throw new HttpError(403, 'PLEASE_SCAN', '请先使用微信扫一扫或页面内扫一扫打开该地点码')
       if (!request.file || request.file.size === 0) throw new HttpError(400, 'PHOTO_REQUIRED', '请选择一张现场照片')
       const processed = path.join(directory, 'processed.jpg')
       await processPhoto(request.file.path, processed)

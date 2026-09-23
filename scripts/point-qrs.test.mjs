@@ -90,6 +90,14 @@ test('point QR files: actual PNG pixels, quiet zone, SVG, CSV, hashes and offlin
     const page = await fs.readFile(path.join(out, 'index.html'), 'utf8')
     assert.ok(page.includes(PRINT_WARNING)); assert.match(page, /width:50mm;height:50mm/)
     assert.equal((page.match(/<img class="qr"/g) || []).length, 5)
+    const instructions = await fs.readFile(path.join(out, '印刷说明-待验证.txt'), 'utf8')
+    for (const text of [page, instructions]) {
+      assert.ok(text.includes(activity.wechat.guideText))
+      assert.doesNotMatch(text, /已登录也不能直接上传|直接微信扫码进入参与方式|请从“印象芦苞”公众号菜单进入/)
+    }
+    assert.match(instructions, /不要求重印码图/)
+    assert.match(instructions, /同设备切换账号/)
+
     const before = await fs.readFile(path.join(out, 'manifest.json'))
     await assert.rejects(generatePointQrs({ origin: FINAL_ORIGIN, out }), { code: 'EEXIST' })
     await assert.rejects(generatePointQrs({ origin: 'http://localhost:5173', out, test: true }), { code: 'EEXIST' })

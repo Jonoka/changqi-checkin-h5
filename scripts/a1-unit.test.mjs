@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { runtimeConfig } from '../server/runtime.js'
 import { applicationUrl, createWechatClient, parsePointQr, safeReturnTo } from '../server/wechat.js'
 import { saveSession } from '../server/session.js'
+import { currentPointKey, setCurrentPoint } from '../server/identity.js'
 import { createScanner } from '../web/src/wechat-scan.js'
 
 const origin = 'https://activity.example.test'
@@ -41,7 +42,7 @@ test('signing URLs stay in the application; callback return URLs cannot escape o
   assert.equal(applicationUrl(`${origin}/?a=1#point/p01`, origin).origin, origin)
   assert.equal(safeReturnTo('/#point/p01', origin), '/#point/p01')
   assert.equal(safeReturnTo(undefined, origin), '/')
-  for (const path of ['//evil.test', '/\\evil.test', 'https://evil.test', '/%2f%2fevil.test', '/auth/wechat', '/auth/callback', '/api/me', '/x/../auth/wechat']) {
+  for (const path of ['//evil.test', '/\\evil.test', 'https://evil.test', '/%2f%2fevil.test', '/auth/wechat', '/auth/callback', '/api/me', '/q/p03', '/Q/p03', '/x/../auth/wechat']) {
     assert.throws(() => safeReturnTo(path, origin))
   }
   assert.throws(() => applicationUrl(`${origin}.evil.test/`, origin), errorCode('INVALID_URL'))
@@ -119,6 +120,31 @@ test('session save awaits its callback and a failed save cannot be retried as a 
   await assert.rejects(saveSession(request), errorCode('SAVE_FAILED'))
   assert.equal(destroyed, true)
   assert.equal(request.session, null)
+})
+
+test('entry qualification is one server-session field, validated against enabled/current configuration', () => {
+  const activity = { enabled: true, points }
+  const session = {}
+  assert.equal(currentPointKey(session, activity), null)
+  setCurrentPoint(session, activity, 'p01')
+  assert.equal(currentPointKey(session, activity), 'p01')
+  assert.equal(currentPointKey(session, { ...activity, enabled: false }), null)
+  assert.equal(currentPointKey(session, { ...activity, points: [points[1]] }), null)
+  setCurrentPoint(session, activity, 'forged')
+  assert.equal(session.scannedPointKey, null)
+  setCurrentPoint(session, { ...activity, enabled: false }, 'p01')
+  assert.equal(session.scannedPointKey, null)
+})
+
+test('SDK/config authentication failure cannot clear a previously identified native-upload user', async () => {
+  const failures = [], state = { phase: 'idle', message: '' }
+  const scanner = createScanner({ state, loadSdk: async () => ({}),
+    getConfig: async () => { throw Object.assign(new Error('simulated config failure'), { code: 'NEED_LOGIN' }) },
+    onFailure: error => failures.push(error), submit: async () => ({}), onPoint() {} })
+  assert.equal(await scanner.initialize(), false)
+  assert.equal(state.phase, 'error')
+  assert.deepEqual(failures, [])
+  scanner.dispose()
 })
 
 function scannerHarness(options = {}) {

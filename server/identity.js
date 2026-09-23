@@ -15,6 +15,16 @@ export function requireUserSession(pool, runtime) {
 }
 
 
+// One ordinary session field for both direct OAuth entry and in-page /api/scan.
+export function currentPointKey(session, activity) {
+  const key = session?.scannedPointKey
+  return activity.enabled && typeof key === 'string' && activity.points.some(point => point.key === key) ? key : null
+}
+
+export function setCurrentPoint(session, activity, key) {
+  session.scannedPointKey = currentPointKey({ scannedPointKey: key }, activity)
+}
+
 export async function findUser(pool, id) {
   const [rows] = await pool.execute('SELECT id, claim_code, claimed_at FROM users WHERE id = ?', [id])
   return rows[0] || null

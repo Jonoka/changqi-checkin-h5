@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { publicActivityConfig } from './config.js'
 import { runtimeConfig } from './runtime.js'
 import { HttpError, sendApiError, sendPage } from './http.js'
-import { mountGuide, mountIdentityAndScan } from './a1.js'
+import { mountGuide, mountIdentityAndScan, sendIdentityFailure } from './a1.js'
 import { mountCheckins } from './checkins.js'
 import { mountPublicClaims, mountMyClaim } from './claims.js'
 import { mountStats } from './stats.js'
@@ -21,7 +21,7 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
   const app = express()
   app.disable('x-powered-by')
   if (runtime.secureCookie) app.set('trust proxy', 1)
-  app.use(['/api', '/auth'], (_request, response, next) => { response.set('Cache-Control', 'no-store'); next() })
+  app.use(['/api', '/auth', '/q'], (_request, response, next) => { response.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); next() })
   app.use(express.json({ limit: '1mb' }))
 
   app.get('/api/activity', (_request, response) => {
@@ -43,16 +43,20 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
     }
   })
 
-  // Public guide routes never load or mutate a user session, even with a login cookie.
+  // Invalid/non-WeChat /q exits before session storage, even with an old login cookie.
   mountGuide(app, activityConfig, runtime)
   mountPublicClaims(app, { pool, runtime, activityConfig })
   mountStats(app, { pool, runtime })
   app.use('/r', (_request, response, next) => { response.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); next() })
-  if (sessionMiddleware) app.use(['/api', '/auth'], sessionMiddleware)
+  if (sessionMiddleware) {
+    app.use(['/api', '/auth'], sessionMiddleware)
+    app.get('/q/:pointKey', sessionMiddleware) // Only the validated WeChat entry can reach this handler.
+  }
   mountIdentityAndScan(app, { pool, runtime, wechatClient, sessionsAvailable: Boolean(sessionMiddleware), activityConfig })
+  app.use('/q', (_request, response) => sendPage(response, { status: 404, title: '地点不存在', code: 'INVALID_POINT', message: '地点不存在，请扫描现场活动二维码', demo: runtime.mockEnabled }))
   mountCheckins(app, { pool, runtime, activityConfig })
   mountMyClaim(app, { pool, runtime, activityConfig })
-  app.use('/auth', (_request, response) => sendPage(response, { status: 404, title: '入口不存在', message: '请从公众号菜单重新进入活动' }))
+  app.use('/auth', (_request, response) => sendPage(response, { status: 404, title: '入口不存在', message: '请使用微信重新打开活动或现场地点二维码' }))
 
   app.use((request, response, next) => {
     if (isApiRequest(request)) return sendApiError(response, 404, 'NOT_FOUND', '接口不存在')
@@ -89,7 +93,8 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
       return sendApiError(response, 500, 'INTERNAL_ERROR', '服务器暂时无法处理请求')
     }
     if (response.headersSent) return next(error)
-    return sendPage(response, { status: 500, title: '暂时无法打开页面', message: '请返回公众号菜单重试' })
+    if (/^\/(auth|q)(\/|$)/.test(request.path)) return sendIdentityFailure(request, response, error, activityConfig, runtime)
+    return sendPage(response, { status: 500, title: '暂时无法打开页面', message: '请稍后重新打开活动' })
   })
 
   return app

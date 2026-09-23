@@ -152,6 +152,17 @@ jobs:
           assert_contains activity "$activity" '长岐村漫游打卡'
           assert_contains home "$home" '<!doctype html>'
           assert_contains guide "$guide" '参与方式'
+          assert_contains guide "$guide" '请在微信内打开活动'
+          # Local image smoke only: inspect the first redirect, never contact WeChat or use real credentials.
+          point_status="$(curl --silent --show-error --output /dev/null --dump-header /tmp/changqi-point-headers --write-out '%{http_code}' --header 'User-Agent: MicroMessenger/8.0 SIMULATED' --header 'X-Forwarded-Proto: https' http://127.0.0.1:18080/q/p03)"
+          test "$point_status" = 302
+          grep -qi 'location: https://open.weixin.qq.com/connect/oauth2/authorize' /tmp/changqi-point-headers
+          grep -qi 'cache-control: no-store' /tmp/changqi-point-headers
+          grep -qi 'vary: User-Agent' /tmp/changqi-point-headers
+          api_status="$(curl --silent --show-error --output /tmp/changqi-me.json --write-out '%{http_code}' http://127.0.0.1:18080/api/me)"
+          test "$api_status" = 401
+          grep -q 'NEED_LOGIN' /tmp/changqi-me.json
+
           status="$(curl --silent --show-error --output /tmp/changqi-invalid-claim.json --write-out '%{http_code}' http://127.0.0.1:18080/api/r/not-a-claim)"
           test "$status" = 404
 

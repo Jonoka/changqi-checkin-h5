@@ -18,7 +18,7 @@ const emit = defineEmits(['refresh', 'login'])
     <template v-else>
       <p class="muted" role="status">{{ identityMessage || '请先识别微信身份，再开始漫游。' }}</p>
       <button v-if="inWechat && !activity.developmentDemo && activity.wechatLoginAvailable" type="button" @click="emit('login')">重新识别微信身份</button>
-      <p v-if="inWechat && !activity.developmentDemo && !activity.wechatLoginAvailable" class="muted">微信接入尚未配置完成，请稍后从公众号菜单重试。</p>
+      <p v-if="inWechat && !activity.developmentDemo && !activity.wechatLoginAvailable" class="muted">微信接入尚未配置完成，请稍后重新打开活动。</p>
       <button type="button" class="secondary" :disabled="locked" @click="emit('refresh')">重试读取身份</button>
     </template>
   </section>

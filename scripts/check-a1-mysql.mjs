@@ -21,6 +21,7 @@ import { checkA2Browser } from './check-a2-browser.mjs'
 import { checkA3Mysql, checkA3Restart } from './check-a3-mysql.mjs'
 import { checkA3Browser } from './check-a3-browser.mjs'
 import { checkA4Pages, checkA4LastPoint } from './check-a4-browser.mjs'
+import { checkEntryMysql, checkEntryBrowser } from './check-entry.mjs'
 const includeA4 = process.argv.includes('--a4')
 const includeA3 = process.argv.includes('--a3') || includeA4
 const includeA2 = process.argv.includes('--a2') || includeA3
@@ -118,16 +119,21 @@ async function count(table) {
 }
 
 function simulatedWechat(publicOrigin) {
+  const consumedCodes = new Set()
   return createWechatClient({
     publicOrigin, appId: 'simulated-app', appSecret: 'simulated-secret',
     fetchImpl: async (value) => {
       const url = new URL(value)
       if (url.pathname === '/sns/oauth2/access_token') {
         const code = url.searchParams.get('code')
+        if (code === 'entry-once') {
+          if (consumedCodes.has(code)) return { ok: true, json: async () => ({ errcode: 40163 }) }
+          consumedCodes.add(code)
+        }
         if (code === 'network-failure') throw new Error('simulated private upstream error')
         if (code === 'invalid-code') return { ok: true, json: async () => ({ errcode: 40029, errmsg: 'simulated invalid code' }) }
         if (code === 'non-json') return { ok: true, json: async () => { throw new Error('simulated non-JSON') } }
-        assert.ok(['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser', 'a3-a', 'a3-b', 'a3-race', 'a3-closed', 'a3-incomplete', 'a3-ui-self', 'a3-ui-staff'].includes(code), 'Unrecognized mock code must not establish identity')
+        assert.ok(['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser', 'a3-a', 'a3-b', 'a3-race', 'a3-closed', 'a3-incomplete', 'a3-ui-self', 'a3-ui-staff', 'entry-a', 'entry-b', 'entry-ui-a', 'entry-ui-b', 'entry-once'].includes(code), 'Unrecognized mock code must not establish identity')
         return { ok: true, json: async () => ({ openid: `simulated-${code}`, access_token: 'simulated-oauth-token' }) }
       }
       if (url.pathname === '/cgi-bin/stable_token') return { ok: true, json: async () => ({ access_token: 'simulated-token', expires_in: 7200 }) }
@@ -234,7 +240,7 @@ try {
   assert.equal(aMe.completedCount, 0)
   assert.equal(aMe.totalCount, activity.points.length)
   assert.equal(aMe.claimUrl, null)
-  assert.deepEqual(Object.keys(aMe).sort(), ['allCompleted', 'claimUrl', 'claimedAt', 'completedCount', 'completedKeys', 'totalCount', 'userLabel'])
+  assert.deepEqual(Object.keys(aMe).sort(), ['allCompleted', 'claimUrl', 'claimedAt', 'completedCount', 'completedKeys', 'scannedPointKey', 'totalCount', 'userLabel'])
   const beforeRepeat = await count('users')
   assert.equal((await oauth(aAgain, 'user-a')).userLabel, aMe.userLabel)
   assert.equal(await count('users'), beforeRepeat)
@@ -266,12 +272,14 @@ try {
     const guide = await visitor.request('/q/p01')
     assert.equal(guide.status, 200)
     assert.match(guide.text, /印象芦苞/)
-    assert.match(guide.text, /底部菜单/)
+    assert.match(guide.text, /请在微信内打开活动/)
+    assert.match(guide.headers.get('vary'), /User-Agent/i)
+    assert.equal(guide.headers.get('cache-control'), 'no-store')
     assert.equal(guide.headers.get('set-cookie'), null)
     assert.equal((await visitor.request('/q/not-a-point')).status, 404)
   }
   assert.deepEqual(await savedSession(a), beforeGuide)
-  ok('/q/p01 always guides anonymous and logged-in visitors without reading/writing their session or granting scan eligibility')
+  ok('non-WeChat /q guides anonymous and stale-cookie visitors without reading/writing sessions or granting eligibility')
 
   const beforeScanCount = await count('checkins')
   const scan = await a.request('/api/scan', { body: { result: `${runtime.publicOrigin}/q/p02` } })
@@ -279,8 +287,8 @@ try {
   assert.equal(scan.payload.data.point.key, 'p02')
   assert.equal(scan.payload.data.alreadyCompleted, false)
   assert.equal((await savedSession(a)).scannedPointKey, 'p02')
-  assert.equal((await savedSession(b)).scannedPointKey, undefined)
-  assert.deepEqual((await a.request('/api/me')).payload.data, stateA)
+  assert.equal((await savedSession(b)).scannedPointKey, null)
+  assert.deepEqual((await a.request('/api/me')).payload.data, { ...stateA, scannedPointKey: 'p02' })
   const completed = await a.request('/api/scan', { body: { result: `${runtime.publicOrigin}/q/p01` } })
   assert.equal(completed.payload.data.alreadyCompleted, true)
   for (const result of [`${runtime.publicOrigin}.evil.test/q/p01`, 'https://evil.test/q/p01', `${runtime.publicOrigin}/r/0123456789`, `${runtime.publicOrigin}/bad/p01`, `${runtime.publicOrigin}/q/missing`, `${runtime.publicOrigin}/q/%70%30%31`, `${runtime.publicOrigin}/q/p01?test=1`]) {
@@ -290,7 +298,7 @@ try {
     assert.equal((await savedSession(a)).scannedPointKey, 'p01')
   }
   assert.equal(await count('checkins'), beforeScanCount)
-  assert.deepEqual((await a.request('/api/me')).payload.data, stateA)
+  assert.deepEqual((await a.request('/api/me')).payload.data, { ...stateA, scannedPointKey: 'p01' })
   ok('valid scan is durably saved before success; completed status is real; invalid URL/host/path/key/claim codes never alter eligibility or progress')
 
   activity.enabled = false
@@ -360,7 +368,7 @@ try {
   assert.notEqual(child.pid, oldPid)
   const restored = browser(processOrigin)
   restored.cookie = durableCookie
-  assert.deepEqual((await restored.request('/api/me')).payload.data, demoBefore)
+  assert.deepEqual((await restored.request('/api/me')).payload.data, { ...demoBefore, scannedPointKey: 'p02' })
   assert.equal((await savedSession(restored)).scannedPointKey, 'p02')
   const demoB = browser(processOrigin)
   assert.equal((await demoB.request('/api/dev/login', { body: { identity: 'visitor-b' } })).payload.data.completedCount, 0)
@@ -402,6 +410,7 @@ try {
   if (includeA3) {
     a3 = await checkA3Mysql({ pool, settings: { ...settings, database }, activity, runtime: proxyApp.runtime, baseUrl: 'http://localhost:5173', directory: tempDirectory, browser, oauth, ok })
   }
+  const entry = includeA3 ? await checkEntryMysql({ pool, activity, baseUrl: 'http://localhost:5173', browser, oauth, samplePath: a2.samplePath, store: sessions.store, ok }) : null
   if (process.env.TEST_BROWSER_EXECUTABLE) {
     const rowsBeforeBrowser = await count('checkins')
     await checkA1Browser({
@@ -433,6 +442,10 @@ try {
           ok('A4 final actual photo save: last point exposes owner voucher action in place and opens #claim, never the staff /r page')
         }
         if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory, activity }); ok('A3 actual Chrome: owner QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
+        if (entry) {
+          await checkEntryBrowser({ ...tools, ...entry, origin: 'http://localhost:5173', samplePath: a2.samplePath, totalCount: activity.points.length })
+          ok('Direct entry Chrome: actual /q OAuth redirect/callback, loading/upload/completed/claimed views, SDK failure independence, account switch, late-state protection and native photo save; WeChat simulated')
+        }
         if (includeA4) {
           if (process.env.TEST_A4_REUSE_EVIDENCE) {
             console.log(`A4 live regression: ${path.relative(process.cwd(), tempDirectory)}/a4-regression.json; unchanged visual evidence reused from ${process.env.TEST_A4_REUSE_EVIDENCE}`)

@@ -148,7 +148,7 @@ onUnmounted(() => {
       <p class="privacy-note">照片不公开展示；已完成地点不替换照片。</p>
     </template>
     <template v-else-if="!enabled"><p>活动暂未开放或已结束，不能上传新照片。</p></template>
-    <template v-else-if="!scanned"><p class="muted">请先使用页面内扫一扫识别该地点。</p><slot name="scan" /><details class="upload-help"><summary>刷新或返回后没有照片？</summary><p>未提交的照片需要重新选择。请重新扫码后继续。</p></details></template>
+    <template v-else-if="!scanned"><p class="muted">请先使用微信扫一扫或页面内扫一扫打开该地点码。</p><slot name="scan" /><details class="upload-help"><summary>刷新或返回后没有照片？</summary><p>未提交的照片需要重新选择。若本站资格尚未恢复，请扫描本站地点码重新进入。</p></details></template>
     <div v-else class="upload-form">
       <figure v-if="preview" class="photo-selection"><img class="photo-preview local-preview" :src="preview" alt="待提交的现场照片预览" @error="message = '当前照片无法预览，请重新拍照或转换为 JPG/PNG'" /><figcaption v-if="file">已选择：{{ file.name }}</figcaption></figure>
       <button v-if="phase === 'unknown'" type="button" class="verify-button" @click="verify">核对保存结果</button>
@@ -161,7 +161,7 @@ onUnmounted(() => {
         </label>
       </div>
       <p class="privacy-note">照片仅用于本次活动记录，不公开展示。</p>
-      <details class="upload-help"><summary>照片要求与说明</summary><p :id="`photo-help-${point.key}`">一张 JPEG / PNG / WebP，最大 {{ Math.round(maxBytes / 1024 / 1024 * 10) / 10 }} MiB。不支持的格式请重新拍照或转换为 JPG/PNG。</p><p>提交前可以重选。刷新会丢失未提交的选择；扫码信息未恢复时请重新扫码。</p></details>
+      <details class="upload-help"><summary>照片要求与说明</summary><p :id="`photo-help-${point.key}`">一张 JPEG / PNG / WebP，最大 {{ Math.round(maxBytes / 1024 / 1024 * 10) / 10 }} MiB。不支持的格式请重新拍照或转换为 JPG/PNG。</p><p>提交前可以重选。刷新会恢复已保存记录与当前有效地点，但未提交的照片需要重新选择。</p></details>
     </div>
     <p v-if="message" class="notice" :class="{ 'error-notice': ['error','unknown'].includes(phase), 'success-notice': phase === 'success' }" role="status">{{ message }}</p>
   </div>

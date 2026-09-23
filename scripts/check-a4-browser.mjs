@@ -8,6 +8,10 @@ const versionFiles = [
   'config/activity.json',
   'server/config.js',
   'server/a1.js',
+  'server/app.js',
+  'server/identity.js',
+  'server/session.js',
+  'server/wechat.js',
   'server/http.js',
   'server/checkins.js',
   'web/src/App.vue',
@@ -97,7 +101,7 @@ export function createA4Capture({ call, evaluate, directory }) {
     assert.ok(!(reuse && process.env.TEST_A4_CAPTURE), 'Choose old evidence reuse OR fresh selected screenshots, not both')
     for (const width of [320, 390, 430]) {
       const takeScreenshot = !reuse && a4CaptureRequested(name, width, process.env.TEST_A4_CAPTURE)
-      const homeAction = ['home', 'logged-out', 'all-completed', 'home-claimed'].includes(name)
+      const homeAction = ['home', 'all-completed', 'home-claimed'].includes(name)
       const viewportHeight = homeAction ? 568 : width === 320 ? 740 : 844
       await call('Emulation.setDeviceMetricsOverride', { width, height: viewportHeight, deviceScaleFactor: 1, mobile: true })
       await evaluate('window.scrollTo(0, 0)')
@@ -293,6 +297,8 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     assert.equal(await evaluate('document.querySelector(".point-disclosure").open'), false, 'duplicated list is collapsed by default')
     await capture('logged-out')
 
+    await wechatUa()
+    await setCookie(cookie)
     const identityInjection = await call('Page.addScriptToEvaluateOnNewDocument', { source: `window.__a4Fetch=window.fetch;window.fetch=async(...args)=>{if(args[0]==='/api/me'){const response=await window.__a4Fetch(...args);await new Promise(resolve=>window.__a4Resume=resolve);throw new TypeError('SIMULATED identity read failure')}return window.__a4Fetch(...args)}` })
     await call('Page.navigate', { url: origin })
     await waitFor('window.__a4Resume && document.body.textContent.includes("正在读取漫游记录")', 'identity loading')
@@ -306,10 +312,16 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     await evaluate('window.fetch=window.__a4Fetch')
     await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: identityInjection.identifier })
     await click('重试读取身份')
-    await waitFor('document.body.textContent.includes("可先浏览地图")', 'real 401 after retry gives ordinary-browser guidance')
-    assert.doesNotMatch(await evaluate('document.querySelector(".identity-block").innerText'), /失效|重试/, 'ordinary browser is not presented as an authorization failure')
+    await waitFor('document.querySelector(".point-count")', 'manual identity retry restores the real session')
+    await normalUa()
+    // Changing the simulated UA needs a new document, not a same-document hash navigation.
+    await call('Page.navigate', { url: `${origin}/?external-entry-test=1#point/p03` })
+    await waitFor('document.body.textContent.includes("可先浏览地图")', 'outside WeChat ignores an old authenticated cookie')
+    assert.equal(await evaluate('Boolean(document.querySelector("input[type=file], .point-count, .saved-photo"))'), false)
+    await capture('outside-point')
 
-    for (const [url, text, label] of [[`${origin}/q/p01`, '印象芦苞', 'guide'], [`${origin}/q/invalid`, '地点不存在', 'guide-invalid'], [`${origin}/auth/callback?state=bad`, '授权未完成', 'auth-error']]) {
+    await call('Network.clearBrowserCookies')
+    for (const [url, text, label] of [[`${origin}/q/p01`, '印象芦苞', 'guide'], [`${origin}/q/invalid`, '地点不存在', 'guide-invalid'], [`${origin}/auth/callback?state=bad`, '身份识别未完成', 'auth-error']]) {
       await call('Page.navigate', { url })
       await waitFor(`document.body.textContent.includes(${JSON.stringify(text)})`, label)
       await capture(label)
@@ -340,6 +352,7 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     await pointerClick({ call, evaluate }, '.point-disclosure > summary')
 
     // Actual pointer hit tests for every configured map AND list entry at all target widths.
+    const restoredEligibility = await evaluate(`fetch('/api/me').then(r=>r.json()).then(r=>r.data.scannedPointKey)`)
     for (const width of [320, 390, 430]) {
       await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
       for (const kind of ['map-point', 'point-button']) for (const point of originalPoints) {
@@ -348,7 +361,7 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
         await waitFor(`document.querySelector('.point-detail')?.dataset.pointKey === ${JSON.stringify(point.key)}`, `${width}px ${kind} routes to ${point.key}`)
         assert.equal(await evaluate(`document.querySelector('.art-detail img')?.getAttribute('src')`), point.image)
         assert.equal(await evaluate(`document.querySelector('.point-heading h2')?.textContent`), point.name)
-        assert.equal(await evaluate(`Boolean(document.querySelector('input[type=file]'))`), false, 'Viewing a hotspot/list entry never grants scanning eligibility')
+        assert.equal(await evaluate(`Boolean(document.querySelector('input[type=file]'))`), point.key === restoredEligibility, 'Viewing only retains the server-restored point; never grants a different point')
         await pointerClick({ call, evaluate }, '.back-button')
         await waitFor(`Boolean(document.querySelector('.village-map'))`, 'return after actual pointer click')
       }

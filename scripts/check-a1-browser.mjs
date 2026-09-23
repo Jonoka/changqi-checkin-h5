@@ -17,6 +17,13 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
   let nextId = 0
   let sessionId
   const pending = new Map()
+  const eventListeners = new Map()
+  const observeEvent = (method, listener) => {
+    if (!eventListeners.has(method)) eventListeners.set(method, new Set())
+    eventListeners.get(method).add(listener)
+    return () => eventListeners.get(method).delete(listener)
+  }
+
   const call = (method, params = {}, target = sessionId) => new Promise((resolve, reject) => {
     const id = ++nextId
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Browser command timed out: ${method}`)) }, 10000)
@@ -51,6 +58,8 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await once(socket, 'open')
     socket.addEventListener('message', ({ data }) => {
       const response = JSON.parse(data)
+      if (response.method) for (const listener of eventListeners.get(response.method) || []) listener(response.params)
+
       const current = pending.get(response.id)
       if (!current) return
       pending.delete(response.id)
@@ -99,8 +108,8 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await pointerClick({ call, evaluate }, '.map-point[data-point-key="p02"]')
     await waitFor('document.querySelector(".point-detail")', 'point viewing')
     await afterView()
-    assert.match(await evaluate('document.body.textContent'), /到达现场后，请使用页面内扫一扫/)
-    assert.match(await evaluate('document.body.textContent'), /请先使用页面内扫一扫/)
+    assert.match(await evaluate('document.body.textContent'), /到达现场后，请使用微信扫一扫或页面内扫一扫/)
+    assert.match(await evaluate('document.body.textContent'), /请先使用微信扫一扫或页面内扫一扫/)
     assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false, 'Viewing a point must not enable upload')
     await capture('point-view')
 
@@ -138,7 +147,7 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     await afterScan()
 
-    if (afterA1) await afterA1({ call, evaluate, click, waitFor, buttonExpression, ready, capture })
+    if (afterA1) await afterA1({ call, evaluate, click, waitFor, buttonExpression, ready, capture, observeEvent })
 
     await call('Network.clearBrowserCookies')
     await call('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 HeadlessChrome A1-NORMAL-BROWSER-TEST' })

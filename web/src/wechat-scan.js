@@ -70,7 +70,8 @@ export function createScanner({ state, loadSdk, getConfig, submit, onPoint, onFa
       generation++ // Discard late SDK callbacks from this failed attempt.
       state.phase = 'error'
       state.message = error.message || '微信扫一扫初始化失败，请重试'
-      onFailure(error)
+      // Configuration/SDK failures affect scanning only. Native upload uses its own authenticated API.
+      // Do not clear an already identified visitor (including on a failed JS-config request).
       return false
     } finally { clearTimeout(timer) }
   }
