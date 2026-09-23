@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "referenceManifest": "assets/reference/manifest.json",
+  "referenceManifestSha256": "09542d9f52f503cf9b7ee43a2aae230d65d00e27995f93d2ac36eeacfec85b70",
+  "crops": [
+    { "id": "map-scene", "reference": "map.png", "crop": { "left": 100, "top": 503, "width": 739, "height": 653 }, "use": "Map editing input only: labels, numerals, signs and coloured status trail remain; not a clean master." },
+    { "id": "well-scene", "reference": "checkin.png", "crop": { "left": 528, "top": 348, "width": 307, "height": 302 }, "use": "p03 editing input: roof edges, plaque and a small foreground person fragment need repair; insufficient detail resolution." },
+    { "id": "well-stone-fragment", "reference": "checkin.png", "crop": { "left": 566, "top": 478, "width": 266, "height": 168 }, "use": "Native text-free well/courtyard fragment. Roof deliberately excluded; detail/texture reference only, not a complete landmark hero." },
+    { "id": "gourd-scene", "reference": "map.png", "crop": { "left": 100, "top": 503, "width": 229, "height": 236 }, "use": "p01 editing input: retain the original gourd ornament; remove label and stone lettering. No cartoon character." },
+    { "id": "hall-scene", "reference": "map.png", "crop": { "left": 509, "top": 503, "width": 330, "height": 252 }, "use": "p02 editing input: original hall, wok-ear roof and facade; tags and plaque/couplet lettering need local repair." },
+    { "id": "banyan-scene", "reference": "map.png", "crop": { "left": 486, "top": 794, "width": 252, "height": 274 }, "use": "p04 editing input: preserve original trunk/aerial roots; tag, coloured trail and edge obstructions remain." },
+    { "id": "summit-scene", "reference": "map.png", "crop": { "left": 100, "top": 903, "width": 425, "height": 241 }, "use": "p05 editing input: overlook, village and forest; remove pin and stone writing, do not add a summit building." }
+  ],
+  "masters": [
+    { "id": "map", "sourceIds": ["map-scene"], "target": "739x653 minimum, preserve composition/aspect; neutral physical trail and no UI", "master": null, "output": "web/public/art/map-restored-v1.webp", "maxWidth": 1200, "maxBytes": 1000000 },
+    { "id": "p03", "sourceIds": ["well-scene", "well-stone-fragment", "map-scene"], "target": "768x512 suggested after genuine source-based repair/expansion, not interpolation", "master": null, "output": "web/public/art/point-p03-restored-v1.webp", "maxWidth": 960, "maxBytes": 600000 },
+    { "id": "p01", "sourceIds": ["gourd-scene", "map-scene"], "target": "640x480 suggested after source-based repair; native crop is not a high-resolution detail", "master": null, "output": "web/public/art/point-p01-restored-v1.webp", "maxWidth": 960, "maxBytes": 600000 },
+    { "id": "p02", "sourceIds": ["hall-scene", "map-scene"], "target": "768x512 suggested after source-based repair, preserve original roof identity", "master": null, "output": "web/public/art/point-p02-restored-v1.webp", "maxWidth": 960, "maxBytes": 600000 },
+    { "id": "p04", "sourceIds": ["banyan-scene", "map-scene"], "target": "640x480 suggested after source-based repair; retain bark, branches and aerial roots", "master": null, "output": "web/public/art/point-p04-restored-v1.webp", "maxWidth": 960, "maxBytes": 600000 },
+    { "id": "p05", "sourceIds": ["summit-scene", "map-scene"], "target": "768x512 suggested after source-based repair; existing overlook/village/forest only", "master": null, "output": "web/public/art/point-p05-restored-v1.webp", "maxWidth": 960, "maxBytes": 600000 }
+  ]
+}

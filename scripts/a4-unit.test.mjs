@@ -8,7 +8,6 @@ import { createScanner } from '../web/src/wechat-scan.js'
 import { createHash } from 'node:crypto'
 import { loadActivityConfig, validateActivityConfig } from '../server/config.js'
 import { villageMapLayout } from '../web/src/map-layout.js'
-import { illustrations } from '../assets/illustrations/village-art.mjs'
 import { reusableA4Evidence, a4CaptureRequested } from './check-a4-browser.mjs'
 
 test('UI: selected fresh screenshots never masquerade as a complete or reused set', () => {
@@ -105,7 +104,8 @@ test('A4: legacy crop files remain preserved at their original dimensions', asyn
   }
 })
 
-test('A4: five keyed landmarks have distinct compressed artwork and appropriate descriptive copy', async () => {
+// Retained runtime integrity only; restored-material acceptance is separate and currently blocked.
+test('A4: retained runtime has distinct keyed artwork and accurate file metadata (not restoration acceptance)', async () => {
   const config = loadActivityConfig()
   const manifest = JSON.parse(await fs.readFile(new URL('../web/public/art/illustration-manifest.json', import.meta.url), 'utf8'))
   const hashes = new Set()
@@ -120,18 +120,23 @@ test('A4: five keyed landmarks have distinct compressed artwork and appropriate 
     assert.ok(file)
     const data = await fs.readFile(new URL(`../${file.path}`, import.meta.url))
     const image = await sharp(data).metadata()
-    assert.equal(image.format, 'webp'); assert.equal(image.width, 720); assert.equal(image.height, 480)
-    assert.ok(data.length > 1000 && data.length < 50000)
+    assert.equal(image.format, 'webp'); assert.equal(image.width, file.width); assert.equal(image.height, file.height)
+    assert.ok(image.width > 0 && image.width <= 1600 && image.height > 0 && image.height <= 2000)
+    assert.ok(data.length > 1000 && data.length < 1500000)
     assert.equal(data.length, file.bytes)
     const hash = createHash('sha256').update(data).digest('hex')
     assert.equal(hash, file.sha256); hashes.add(hash)
   }
   assert.equal(hashes.size, 5)
   const map = manifest.files.find(file => file.path.endsWith('/map-environment.webp'))
-  assert.equal(map.width, 720); assert.equal(map.height, 1240); assert.ok(map.bytes < 100000)
-  assert.ok(manifest.files.reduce((sum, file) => sum + file.bytes, 0) < 200000)
-  for (const svg of Object.values(illustrations)) assert.doesNotMatch(svg, /<text\b|<image\b|<foreignObject\b|<script\b/)
-  assert.equal(manifest.sourceSha256, createHash('sha256').update(await fs.readFile(new URL('../assets/illustrations/village-art.mjs', import.meta.url))).digest('hex'))
+  const mapBytes = await fs.readFile(new URL(`../${map.path}`, import.meta.url))
+  const mapImage = await sharp(mapBytes).metadata()
+  assert.equal(mapImage.width, map.width); assert.equal(mapImage.height, map.height)
+  assert.equal(mapBytes.length, map.bytes)
+  assert.equal(createHash('sha256').update(mapBytes).digest('hex'), map.sha256)
+  assert.ok(manifest.files.reduce((sum, file) => sum + file.bytes, 0) < 5000000)
+  // PNG source hashes, native crop pixels, missing-master gate and output ownership are tested
+  // in a4-image-art.test.mjs; the historical SVG fingerprint is no longer an art-generation input.
   for (const filename of ['web/src/App.vue', 'web/src/VillageMap.vue', 'web/src/ClaimPage.vue', 'server/http.js']) {
     assert.doesNotMatch(await fs.readFile(new URL(`../${filename}`, import.meta.url), 'utf8'), /\/art\/(?:lane|village)\.webp/)
   }

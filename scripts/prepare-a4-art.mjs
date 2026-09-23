@@ -1,43 +1,103 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { createHash } from 'node:crypto'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import sharp from 'sharp'
 
-import { illustrations } from '../assets/illustrations/village-art.mjs'
-
-// The former village.webp/lane.webp crops contain signs; they are preserved as legacy files,
-// not reused or described as text-free. New artwork is authored SVG, then compressed to WebP.
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
-const originals = {
-  'home.png': '60bdd398e9547071278774a5b2c5fe77cccea92c7a65ed3dcf160fa136763713',
-  'checkin.png': '60ebb1b73288cd044fc4c8958b63d87909280828f2dde5ca3180502a1e045e63',
-  'map.png': 'e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078'
+const recipePath = 'assets/illustrations/restoration/recipe.json'
+const prefix = 'assets/illustrations/restoration/'
+const projectRoot = fileURLToPath(new URL('../', import.meta.url))
+function requireValue(condition, message) { if (!condition) throw new Error(message) }
+function localPath(root, value) {
+  requireValue(typeof value === 'string' && /^(?:assets\/|web\/public\/art\/)[A-Za-z0-9._/-]+$/.test(value) && !value.split('/').includes('..'), `Unsafe artwork path: ${value}`)
+  return path.join(root, value)
 }
-for (const [name, digest] of Object.entries(originals)) {
-  if (hash(await fs.readFile(`assets/reference/${name}`)) !== digest) throw new Error(`Approved original changed: ${name}`)
+async function raster(bytes, label) {
+  const meta = await sharp(bytes, { limitInputPixels: 16000000 }).metadata()
+  requireValue(['png', 'webp'].includes(meta.format) && (meta.pages || 1) === 1, `Expected a single PNG/WebP image master: ${label}`)
+  return meta
 }
-const manifestPath = 'web/public/art/illustration-manifest.json'
-let previous = { files: [] }
-try { previous = JSON.parse(await fs.readFile(manifestPath, 'utf8')) } catch (error) { if (error.code !== 'ENOENT') throw error }
-const outputs = []
-for (const [name, svg] of Object.entries(illustrations)) {
-  if (/<text\b|<image\b|<foreignObject\b|<script\b/i.test(svg)) throw new Error(`Unexpected embedded content in ${name}`)
-  const bytes = await sharp(Buffer.from(svg), { density: 144 }).resize({ width: 720 }).webp({ quality: 78, effort: 5 }).toBuffer()
-  outputs.push({ path: `web/public/art/${name}.webp`, bytes, svgSha256: hash(svg), ...await sharp(bytes).metadata() })
+async function writeOwned(root, manifestPath, outputs, metadata) {
+  let previous = { files: [] }, manifestBefore = null
+  try { manifestBefore = await fs.readFile(localPath(root, manifestPath)); previous = JSON.parse(manifestBefore) } catch (error) { if (error.code !== 'ENOENT') throw error }
+  requireValue(new Set(outputs.map(file => file.path)).size === outputs.length, 'Duplicate artwork output')
+  // All inputs and every existing destination are checked before the first write.
+  for (const output of outputs) {
+    try {
+      const existing = await fs.readFile(localPath(root, output.path))
+      requireValue(hash(existing) === hash(output.data) || previous.files?.some(file => file.path === output.path && file.sha256 === hash(existing)), `Preserve modified/unowned artwork: ${output.path}`)
+    } catch (error) { if (error.code !== 'ENOENT') throw error }
+  }
+  const current = await fs.readFile(localPath(root, manifestPath)).catch(error => { if (error.code === 'ENOENT') return null; throw error })
+  requireValue((current === null && manifestBefore === null) || (current !== null && manifestBefore !== null && hash(current) === hash(manifestBefore)), 'Artwork manifest changed during preflight')
+  const files = []
+  for (const { data, ...file } of outputs) {
+    const destination = localPath(root, file.path)
+    await fs.mkdir(path.dirname(destination), { recursive: true })
+    await fs.writeFile(destination, data)
+    files.push({ ...file, bytes: data.length, sha256: hash(data) })
+  }
+  const manifest = { ...metadata, files }
+  await fs.mkdir(path.dirname(localPath(root, manifestPath)), { recursive: true })
+  await fs.writeFile(localPath(root, manifestPath), JSON.stringify(manifest, null, 2) + '\n')
+  return manifest
 }
-// Preflight every existing derivative before any overwrite: preserve unexpected manual edits.
-for (const output of outputs) {
-  try {
-    const existing = await fs.readFile(output.path)
-    if (hash(existing) !== hash(output.bytes) && previous.files.find(file => file.path === output.path)?.sha256 !== hash(existing)) {
-      throw new Error(`Preserve modified/unowned artwork: ${output.path}`)
+
+// Extraction is intentionally separate from runtime generation: raw crops are never clean masters.
+export async function prepareArt({ root = projectRoot, extractSources = false } = {}) {
+  const recipeBytes = await fs.readFile(localPath(root, recipePath))
+  const recipe = JSON.parse(recipeBytes)
+  requireValue(recipe.version === 1 && recipe.crops?.length && recipe.masters?.length, 'Invalid artwork recipe')
+  const refBytes = await fs.readFile(localPath(root, recipe.referenceManifest))
+  requireValue(hash(refBytes) === recipe.referenceManifestSha256, 'Reference manifest changed')
+  const originals = new Map()
+  for (const file of JSON.parse(refBytes).files) {
+    const bytes = await fs.readFile(localPath(root, file.path))
+    requireValue(hash(bytes) === file.sha256, `Approved original changed: ${file.path}`)
+    const meta = await raster(bytes, file.path)
+    requireValue(meta.width === file.width && meta.height === file.height, `Reference dimensions changed: ${file.path}`)
+    originals.set(path.posix.basename(file.path), { ...file, data: bytes })
+  }
+  if (extractSources) {
+    const outputs = []
+    for (const entry of recipe.crops) {
+      requireValue(/^[a-z0-9-]+$/.test(entry.id), 'Invalid crop id')
+      const source = originals.get(entry.reference)
+      requireValue(source, `Unknown crop reference: ${entry.reference}`)
+      const data = await sharp(source.data).extract(entry.crop).png({ compressionLevel: 9 }).toBuffer()
+      const meta = await raster(data, entry.id)
+      outputs.push({ path: `${prefix}sources/${entry.id}.png`, data, width: meta.width, height: meta.height, reference: source.path, referenceSha256: source.sha256, crop: entry.crop, use: entry.use })
     }
-  } catch (error) { if (error.code !== 'ENOENT') throw error }
+    return writeOwned(root, `${prefix}source-manifest.json`, outputs, { source: recipePath, sourceSha256: hash(recipeBytes), method: 'Native-pixel PNG crops only; no painting, interpolation, UI removal or runtime adoption. See TASKS for review.' })
+  }
+  const missing = recipe.masters.filter(entry => !entry.master || entry.master.reviewed !== true)
+  requireValue(missing.length === 0, `Image master gate blocked: ${missing.map(entry => entry.id).join(', ')}. No runtime files written; source crops are not UI-free masters.`)
+  const outputs = []
+  for (const entry of recipe.masters) {
+    const master = entry.master
+    requireValue(master.path.startsWith(`${prefix}masters/`) && /\.(png|webp)$/.test(master.path), 'Master must be an independent PNG/WebP under restoration/masters')
+    requireValue(typeof master.method === 'string' && master.method.trim().length > 0, 'Record the actual image-editing method')
+    requireValue(entry.sourceIds?.length && entry.sourceIds.every(id => recipe.crops.some(crop => crop.id === id)), 'Master source lineage missing')
+    const bytes = await fs.readFile(localPath(root, master.path))
+    requireValue(hash(bytes) === master.sha256, `Master hash changed: ${master.path}`)
+    const meta = await raster(bytes, master.path)
+    requireValue(meta.width === master.width && meta.height === master.height, `Master dimensions changed: ${master.path}`)
+    requireValue(Number.isInteger(entry.maxWidth) && entry.maxWidth > 0 && entry.maxWidth <= 1600, 'Invalid derivative width')
+    requireValue(Number.isInteger(entry.maxBytes) && entry.maxBytes > 0 && entry.maxBytes <= 1500000, 'Invalid derivative budget')
+    requireValue(/^web\/public\/art\/(?:map|point-[a-z0-9_-]+)-restored-v\d+\.webp$/.test(entry.output), 'Use a versioned restored image filename')
+    const data = await sharp(bytes).resize({ width: entry.maxWidth, withoutEnlargement: true }).webp({ quality: 86, effort: 5 }).toBuffer()
+    requireValue(data.length <= entry.maxBytes, `Review compression/size instead of silently reducing quality: ${entry.id}`)
+    const size = await raster(data, entry.output)
+    outputs.push({ path: entry.output, data, width: size.width, height: size.height, master, sourceIds: entry.sourceIds })
+  }
+  requireValue(outputs.reduce((sum, file) => sum + file.data.length, 0) <= 5000000, 'Review total artwork budget')
+  return writeOwned(root, 'web/public/art/illustration-manifest.json', outputs, { source: recipePath, sourceSha256: hash(recipeBytes), method: 'Source-based reviewed raster masters; sharp WebP quality 86, preserve aspect and never enlarge. Model edits are saved masters, not pixel-reproducible generations.' })
 }
-await fs.mkdir('web/public/art', { recursive: true })
-const files = []
-for (const { path, bytes, width, height, svgSha256 } of outputs) {
-  await fs.writeFile(path, bytes)
-  files.push({ path, bytes: bytes.length, width, height, sha256: hash(bytes), svgSha256 })
-  console.log(`${path}: ${bytes.length} bytes; sha256=${hash(bytes)}`)
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  try {
+    requireValue(process.argv.slice(2).every(arg => arg === '--extract-sources'), 'Usage: node scripts/prepare-a4-art.mjs [--extract-sources]')
+    const result = await prepareArt({ extractSources: process.argv.includes('--extract-sources') })
+    for (const file of result.files) console.log(`${file.path}: ${file.width}x${file.height}, ${file.bytes} bytes, sha256=${file.sha256}`)
+  } catch (error) { console.error(error.message); process.exitCode = 1 }
 }
-await fs.writeFile(manifestPath, JSON.stringify({ source: 'assets/illustrations/village-art.mjs', sourceSha256: hash(await fs.readFile('assets/illustrations/village-art.mjs')), method: 'Original text-free SVG concept artwork; sharp WebP quality 78, width 720. Not verified scenery.', files }, null, 2) + '\n')
