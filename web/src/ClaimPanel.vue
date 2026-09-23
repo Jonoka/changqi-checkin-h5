@@ -24,7 +24,7 @@ onUnmounted(() => { attempt++ })
 
 <template>
   <section class="claim-panel" :class="{ 'claim-locked': !me.allCompleted }" aria-label="礼品领取">
-    <p class="voucher-owner"><strong>{{ me.userLabel }}</strong></p>
+    <p class="voucher-owner">游客编号：<strong>{{ me.userLabel }}</strong></p>
     <h3>{{ me.claimedAt ? '礼品已领取' : !activity.enabled ? '活动已结束' : me.allCompleted ? '漫游印记已集齐' : '还差一些漫游印记' }}</h3>
     <template v-if="me.allCompleted && !me.claimedAt && activity.enabled">
       <p>{{ activity.claimLocationText }}</p>

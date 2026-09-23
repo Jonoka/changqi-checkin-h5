@@ -432,7 +432,7 @@ try {
           assert.equal(finalState.allCompleted, true); assert.equal(finalState.claimedAt, null)
           ok('A4 final actual photo save: last point exposes owner voucher action in place and opens #claim, never the staff /r page')
         }
-        if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory }); ok('A3 actual Chrome: owner QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
+        if (includeA3) { await checkA3Browser({ ...tools, ...a3, origin: 'http://localhost:5173', directory: tempDirectory, activity }); ok('A3 actual Chrome: owner QR, self cancel/confirm, staff without login, unknown-result lock, response-loss recovery, refresh and statistics access') }
         if (includeA4) {
           if (process.env.TEST_A4_REUSE_EVIDENCE) {
             console.log(`A4 live regression: ${path.relative(process.cwd(), tempDirectory)}/a4-regression.json; unchanged visual evidence reused from ${process.env.TEST_A4_REUSE_EVIDENCE}`)

@@ -6,16 +6,53 @@ import sharp from 'sharp'
 
 // Reuse the existing Chrome connection. WeChat stays simulated; claims/COUNT use real MySQL.
 export async function checkA3Browser({ call, evaluate, click, waitFor, ready, buttonExpression, origin, directory,
-  selfCookie, staffCookie, incompleteCookie, selfUrl, staffUrl, credential, assertUiClaim, countClaimed, capture = async () => {} }) {
+  selfCookie, staffCookie, incompleteCookie, selfUrl, staffUrl, credential, assertUiClaim, countClaimed, activity, capture = async () => {} }) {
   const setCookie = (cookie) => call('Network.setCookie', { name: 'changqi.sid', value: cookie.slice('changqi.sid='.length), url: origin, httpOnly: true, sameSite: 'Lax' })
   const claimed = () => waitFor('document.querySelector(".claimed-status")', 'server-confirmed claim display')
   const locked = (label) => evaluate(`${buttonExpression(label)}.disabled`)
   const before = await countClaimed()
+  const labels = []
+  // Both real isolated visitors: owner voucher and anonymous staff view agree before any write.
+  for (const [cookie, url] of [[selfCookie, selfUrl], [staffCookie, staffUrl]]) {
+    await setCookie(cookie); await call('Page.navigate', { url: origin })
+    await waitFor(buttonExpression('查看领取凭证'), 'completed home primary action')
+    assert.doesNotMatch(await evaluate('document.body.innerText'), /CQ\d+/)
+    assert.equal(await evaluate('document.querySelectorAll(".reward-next").length'), 1)
+    assert.equal(await evaluate('Boolean(document.querySelector(".scan-dock"))'), false, 'completed visitor has one primary action, not scan')
+    const label = await evaluate("fetch('/api/me').then(r=>r.json()).then(r=>r.data.userLabel)")
+    labels.push(label)
+    await call('Page.navigate', { url: `${origin}/#point/p01` })
+    await waitFor('document.querySelector(".success-card") && document.querySelector(".saved-photo")?.naturalWidth > 0', 'each completed visitor sees their own saved point')
+    assert.doesNotMatch(await evaluate('document.body.innerText'), /CQ\d+/, 'both completed visitors hide numbers on point/success views')
+    assert.match(await evaluate('document.querySelector(".scan-notice").textContent'), /本站已完成/)
+    assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false)
+    await click('查看领取凭证')
+    await waitFor('document.querySelector(".voucher-owner strong")', 'owner number')
+    assert.equal(await evaluate('document.querySelector(".voucher-owner strong").textContent'), label)
+    await call('Network.clearBrowserCookies'); await call('Page.navigate', { url })
+    await waitFor('document.querySelector(".guest-number")', 'matching staff number')
+    assert.equal(await evaluate('document.querySelector(".guest-number").textContent'), label)
+  }
+  assert.notEqual(labels[0], labels[1], 'two visitors never share a label')
+  assert.equal(await countClaimed(), before, 'viewing either voucher never claims')
+  if (activity) {
+    const enabled = activity.enabled
+    try {
+      activity.enabled = false
+      await setCookie(selfCookie); await call('Page.navigate', { url: origin })
+      await waitFor('document.querySelector(".reward-next") && document.body.textContent.includes("活动已结束")', 'closed completed home')
+      assert.equal(await evaluate(`Boolean(${buttonExpression('查看领取凭证')})`), false, 'closed activity has no first-claim primary action')
+      await call('Page.navigate', { url: `${origin}/#claim` })
+      await waitFor('document.querySelector(".claim-panel")', 'closed direct voucher')
+      assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr, .claim-action button:not([disabled])"))'), false, 'closed activity cannot first claim through direct voucher')
+      await capture('claim-closed')
+    } finally { activity.enabled = enabled }
+  }
 
   await setCookie(incompleteCookie); await call('Page.navigate', { url: origin }); await ready()
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr"))'), false)
   assert.equal(await evaluate(`Boolean(${buttonExpression('我已领取礼品')})`), false)
-  await setCookie(selfCookie); await call('Page.navigate', { url: origin }); await ready()
+  await setCookie(selfCookie); await call('Page.navigate', { url: origin })
   await waitFor(buttonExpression('查看领取凭证'), 'owner voucher entry after all points complete')
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr, .claim-panel"))'), false, 'home keeps the full voucher collapsed')
   await capture('all-completed')
@@ -79,12 +116,17 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   assert.equal(await evaluate('window.__a3Writes'), 1)
   await evaluate('window.__a3Release(); window.fetch = window.__a3Fetch')
   await claimed(); await assertUiClaim('self', true)
+  assert.equal(await evaluate('document.querySelector(".voucher-owner strong").textContent'), labels[0], 'self number remains after claiming')
   await capture('claim-complete')
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr"))'), false)
   const firstTime = await evaluate('document.querySelector(".claimed-status").textContent')
   await call('Page.reload'); await claimed()
   assert.equal(await evaluate('document.querySelector(".claimed-status").textContent'), firstTime)
   assert.equal(await countClaimed(), before + 1)
+
+  await call('Network.clearBrowserCookies'); await call('Page.navigate', { url: selfUrl })
+  await claimed()
+  assert.equal(await evaluate('document.querySelector(".guest-number").textContent'), labels[0], 'self-claimed staff record keeps its owner number')
 
   // Plain browser without any visitor cookie, staff account, OAuth or WeChat camera.
   await call('Network.clearBrowserCookies')
@@ -111,6 +153,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   await assertUiClaim('staff', true)
   assert.equal(await countClaimed(), before + 2)
   await click('刷新领取状态'); await claimed()
+  assert.equal(await evaluate('document.querySelector(".guest-number").textContent'), labels[1], 'staff-claimed record keeps the second visitor number')
   await capture('staff-complete')
   for (const width of [320, 390, 430]) {
     await call('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: true })
@@ -123,6 +166,16 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   await call('Page.navigate', { url: origin })
   await claimed()
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-qr"))'), false)
+  assert.doesNotMatch(await evaluate('document.body.innerText'), /CQ\d+/)
+  const enabled = activity?.enabled
+  try {
+    if (activity) { activity.enabled = false; await call('Page.reload'); await claimed() }
+    await capture('home-claimed')
+    await click('查看领取记录')
+    await waitFor('document.querySelector(".voucher-owner strong")', 'owner claimed record')
+    assert.equal(await evaluate('document.querySelector(".voucher-owner strong").textContent'), labels[1], 'closed activity preserves the staff-claimed owner record')
+  } finally { if (activity) activity.enabled = enabled }
+  await call('Page.navigate', { url: origin }); await claimed()
   await evaluate("window.dispatchEvent(new Event('pageshow'))")
   await claimed()
   await call('Page.navigate', { url: `${origin}/r/invalid` })

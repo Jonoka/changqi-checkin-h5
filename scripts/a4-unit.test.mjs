@@ -9,7 +9,15 @@ import { createHash } from 'node:crypto'
 import { loadActivityConfig, validateActivityConfig } from '../server/config.js'
 import { villageMapLayout } from '../web/src/map-layout.js'
 import { illustrations } from '../assets/illustrations/village-art.mjs'
-import { reusableA4Evidence } from './check-a4-browser.mjs'
+import { reusableA4Evidence, a4CaptureRequested } from './check-a4-browser.mjs'
+
+test('UI: selected fresh screenshots never masquerade as a complete or reused set', () => {
+  assert.equal(a4CaptureRequested('home', 320, undefined), true)
+  assert.equal(a4CaptureRequested('home', 320, 'home@320,claim-ready@390'), true)
+  assert.equal(a4CaptureRequested('home', 430, 'home@320,claim-ready@390'), false)
+  assert.throws(() => a4CaptureRequested('home', 320, 'home@319'), /Invalid A4/)
+  assert.throws(() => a4CaptureRequested('home', 320, '../old@320'), /Invalid A4/)
+})
 
 test('A5: visual evidence reuse rejects changed runtime, missing images and unsafe filenames', async () => {
   await fs.mkdir('tmp', { recursive: true })

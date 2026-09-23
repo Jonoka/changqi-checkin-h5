@@ -70,6 +70,14 @@ export async function reusableA4Evidence(directory, version) {
   return { directory: path.relative(process.cwd(), directory), runtimeSha256: version.runtimeSha256, screenshotCount: evidence.screenshots.length, imageFileCount: files.size }
 }
 
+// Optional exact state@width capture selection: assertions still run for every state/width.
+export function a4CaptureRequested(name, width, selection) {
+  if (!selection) return true
+  const targets = selection.split(',')
+  assert.ok(targets.every(target => /^[a-z0-9-]+@(320|390|430)$/.test(target)), 'Invalid A4 screenshot selection')
+  return targets.includes(`${name}@${width}`)
+}
+
 // Uses the existing Chrome CDP connection and the same isolated MySQL application.
 // These are real rendered Vue/HTTP/SQL states. WeChat SDK/network failures remain explicitly simulated.
 export function createA4Capture({ call, evaluate, directory }) {
@@ -82,13 +90,22 @@ export function createA4Capture({ call, evaluate, directory }) {
     const version = await versionPromise
     const reuse = process.env.TEST_A4_REUSE_EVIDENCE
       ? await (reusePromise ??= reusableA4Evidence(path.resolve(process.env.TEST_A4_REUSE_EVIDENCE), version)) : null
+    assert.ok(!(reuse && process.env.TEST_A4_CAPTURE), 'Choose old evidence reuse OR fresh selected screenshots, not both')
     for (const width of [320, 390, 430]) {
-      const viewportHeight = ['home', 'logged-out'].includes(name) ? 568 : width === 320 ? 740 : 844
+      const takeScreenshot = !reuse && a4CaptureRequested(name, width, process.env.TEST_A4_CAPTURE)
+      const homeAction = ['home', 'logged-out', 'all-completed', 'home-claimed'].includes(name)
+      const viewportHeight = homeAction ? 568 : width === 320 ? 740 : 844
       await call('Emulation.setDeviceMetricsOverride', { width, height: viewportHeight, deviceScaleFactor: 1, mobile: true })
       await evaluate('window.scrollTo(0, 0)')
       await evaluate(`[...document.querySelectorAll('img[loading="lazy"]')].forEach(image => image.loading = 'eager')`)
       await evaluate(`document.fonts.ready.then(() => Promise.all([...document.images].map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.addEventListener('load', resolve, {once:true}); image.addEventListener('error', resolve, {once:true}); setTimeout(resolve, 2000) }))))`)
       assert.equal(await evaluate('document.documentElement.scrollWidth'), width, `${name}: no horizontal overflow at ${width}px`)
+      if (await evaluate('Boolean(document.querySelector(".village-map, .point-detail"))')) {
+        assert.doesNotMatch(await evaluate('document.body.innerText'), /CQ\d+/, `${name}: visitor number is absent from home and all point states`)
+      }
+      if (await evaluate('Boolean(document.querySelector(".point-detail .success-card"))')) {
+        assert.match(await evaluate('document.querySelector(".scan-notice").textContent'), /本站已完成/, `${name}: completed point never requests another scan`)
+      }
       assert.doesNotMatch(await evaluate('document.body.innerText'), /本人|扫一扫已就绪|选择现场照片|拍照提示/, `${name}: compact visitor-facing copy`)
       assert.equal(await evaluate('Boolean(document.querySelector(".photo-tip"))'), false, `${name}: no photography-tip block`)
       const headingStyle = await evaluate(`(() => { const h=document.querySelector('.point-heading h2'); if(!h) return null; const s=getComputedStyle(h); return { borders:[s.borderTopWidth,s.borderRightWidth,s.borderBottomWidth,s.borderLeftWidth], outline:s.outlineStyle }; })()`)
@@ -107,12 +124,12 @@ export function createA4Capture({ call, evaluate, directory }) {
       }
       let firstScreenScan = null
       let viewportFile = null
-      if (['home', 'logged-out'].includes(name)) {
-        firstScreenScan = await evaluate(`(() => { const b=[...document.querySelectorAll('.scan-controls button')].find(b=>b.textContent.trim()==='扫一扫打卡'); const r=b.getBoundingClientRect(); const m=document.querySelector('.village-map').getBoundingClientRect(); return { top:r.top,bottom:r.bottom,mapTop:m.top,viewportHeight:innerHeight,uncovered:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)) }; })()`)
-        assert.ok(firstScreenScan.top >= 0 && firstScreenScan.bottom <= firstScreenScan.viewportHeight, `${name}: scan button fully visible without scrolling at ${width}x${viewportHeight}`)
-        assert.ok(firstScreenScan.bottom <= firstScreenScan.mapTop, `${name}: scan button above the map`)
-        assert.equal(firstScreenScan.uncovered, true, `${name}: first-screen scan button is not covered`)
-        if (!reuse) {
+      if (homeAction) {
+        firstScreenScan = await evaluate(`(() => { const b=document.querySelector('.reward-next button') || [...document.querySelectorAll('.scan-controls button')].find(b=>b.textContent.trim()==='扫一扫打卡'); const r=b.getBoundingClientRect(); const m=document.querySelector('.village-map').getBoundingClientRect(); return { label:b.textContent.trim(),top:r.top,bottom:r.bottom,mapTop:m.top,viewportHeight:innerHeight,uncovered:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)) }; })()`)
+        assert.ok(firstScreenScan.top >= 0 && firstScreenScan.bottom <= firstScreenScan.viewportHeight, `${name}: primary action fully visible at ${width}x${viewportHeight}: ${JSON.stringify(firstScreenScan)}`)
+        assert.ok(firstScreenScan.bottom <= firstScreenScan.mapTop, `${name}: primary action above the map`)
+        assert.equal(firstScreenScan.uncovered, true, `${name}: first-screen primary action is not covered`)
+        if (takeScreenshot) {
           const firstScreen = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
           viewportFile = `a4-${name}-first-screen-${width}.png`
           await fs.writeFile(path.join(directory, viewportFile), Buffer.from(firstScreen.data, 'base64'))
@@ -134,10 +151,8 @@ export function createA4Capture({ call, evaluate, directory }) {
       })()`)
       assert.deepEqual(alignment, [], `${name}: route, landmark and click target use the same coordinate system at ${width}px`)
 
-      if (reuse) {
-        checkedStates.set(`${name}-${width}`, { state: name, width, viewportHeight, firstScreenScan, checkedAt: new Date().toISOString() })
-        continue
-      }
+      checkedStates.set(`${name}-${width}`, { state: name, width, viewportHeight, firstScreenAction: firstScreenScan, checkedAt: new Date().toISOString(), captured: takeScreenshot })
+      if (!takeScreenshot) continue
 
       const metrics = await call('Page.getLayoutMetrics')
       const size = metrics.cssContentSize
@@ -146,7 +161,7 @@ export function createA4Capture({ call, evaluate, directory }) {
       await fs.writeFile(path.join(directory, filename), Buffer.from(screenshot.data, 'base64'))
 
       let mapFile = null
-      if (name === 'home') {
+      if (name === 'home' && !process.env.TEST_A4_CAPTURE) {
         const box = await evaluate(`(() => { const r=document.querySelector('.village-map')?.getBoundingClientRect(); return r ? {x:Math.floor(r.left+scrollX),y:Math.floor(r.top+scrollY),width:Math.ceil(r.width),height:Math.ceil(r.height),scale:1} : null })()`)
         if (box) {
           const cropped = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: box })
@@ -167,6 +182,10 @@ export function createA4Capture({ call, evaluate, directory }) {
       }, null, 2))
       return
     }
+    await fs.writeFile(path.join(directory, 'a4-regression.json'), JSON.stringify({
+      environment: 'Actual Chrome + isolated MySQL; WeChat simulated; fresh selected screenshots, no evidence reuse',
+      version, checkedStates: [...checkedStates.values()], screenshotSelection: process.env.TEST_A4_CAPTURE || 'all', screenshotCount: records.length
+    }, null, 2))
     await fs.writeFile(path.join(directory, 'a4-screenshots.json'), JSON.stringify({
       environment: 'Chrome + isolated MySQL; WeChat SDK/network/fault injection simulated; not real-device acceptance',
       version,
@@ -245,7 +264,9 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
 
     const identityInjection = await call('Page.addScriptToEvaluateOnNewDocument', { source: `window.__a4Fetch=window.fetch;window.fetch=async(...args)=>{if(args[0]==='/api/me'){const response=await window.__a4Fetch(...args);await new Promise(resolve=>window.__a4Resume=resolve);throw new TypeError('SIMULATED identity read failure')}return window.__a4Fetch(...args)}` })
     await call('Page.navigate', { url: origin })
-    await waitFor('window.__a4Resume && document.body.textContent.includes("正在恢复身份")', 'identity loading')
+    await waitFor('window.__a4Resume && document.body.textContent.includes("正在读取漫游记录")', 'identity loading')
+    assert.equal(await evaluate('document.querySelectorAll(".identity-block button").length'), 0, 'loading has no login/retry buttons')
+    assert.doesNotMatch(await evaluate('document.querySelector(".identity-block").innerText'), /失败|失效|重试|登录后/, 'loading is exclusive')
     await capture('identity-loading')
     await evaluate('window.__a4Resume()')
     await waitFor('document.body.textContent.includes("网络暂时不可用")', 'identity read failure')
@@ -254,7 +275,8 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     await evaluate('window.fetch=window.__a4Fetch')
     await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: identityInjection.identifier })
     await click('重试读取身份')
-    await waitFor('document.body.textContent.includes("身份已失效")', 'real 401 after retry')
+    await waitFor('document.body.textContent.includes("可先浏览地图")', 'real 401 after retry gives ordinary-browser guidance')
+    assert.doesNotMatch(await evaluate('document.querySelector(".identity-block").innerText'), /失效|重试/, 'ordinary browser is not presented as an authorization failure')
 
     for (const [url, text, label] of [[`${origin}/q/p01`, '印象芦苞', 'guide'], [`${origin}/q/invalid`, '地点不存在', 'guide-invalid'], [`${origin}/auth/callback?state=bad`, '授权未完成', 'auth-error']]) {
       await call('Page.navigate', { url })
@@ -269,6 +291,14 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
     await waitFor('document.querySelector(".point-count") && [...document.querySelectorAll("button")].some(b=>b.textContent.trim()==="扫一扫打卡" && !b.disabled)', 'logged-in home')
     assert.equal(await evaluate('document.querySelector(".point-disclosure").open'), false)
     await capture('home')
+    await evaluate(`window.__uiFetch=window.fetch;window.fetch=async(...args)=>{if(args[0]==='/api/me')throw new TypeError('SIMULATED signed-in identity refresh failure');return window.__uiFetch(...args)}`)
+    await click('刷新状态')
+    await waitFor('document.querySelector(".identity-block [role=alert]")', 'signed-in refresh failure remains visible')
+    assert.equal(await evaluate('Boolean(document.querySelector(".point-count"))'), false)
+    await evaluate('window.fetch=window.__uiFetch')
+    await click('重试读取身份')
+    await waitFor('document.querySelector(".point-count")', 'manual retry recovers actual signed-in progress')
+    assert.equal(await evaluate('Boolean(document.querySelector(".identity-block [role=alert]"))'), false)
     await pointerClick({ call, evaluate }, '.point-disclosure > summary')
     await waitFor('document.querySelector(".point-disclosure").open === true', 'expanded point list')
     assert.equal(await evaluate(`document.querySelectorAll('.point-button').length`), originalPoints.length)
@@ -299,6 +329,11 @@ export async function checkA4Pages({ call, evaluate, click, waitFor, capture, or
       await capture(`point-${point.key}-scan-ready`)
       await pointerClick({ call, evaluate }, '.back-button')
       await waitFor('document.querySelector(".village-map") && !document.querySelector(".point-detail")', 'return to map')
+      await pointerClick({ call, evaluate }, `.map-point[data-point-key="${point.key}"]`)
+      await waitFor(`document.querySelector('input[type=file]')?.id === ${JSON.stringify(`photo-${point.key}`)}`, 'same scanned point keeps its available upload action')
+      assert.match(await evaluate('document.querySelector(".scan-notice").textContent'), /请上传本站的现场照片/)
+      await pointerClick({ call, evaluate }, '.back-button')
+      await waitFor('document.querySelector(".village-map")', 'map after revisiting scanned point')
     }
 
     // p03 -> p04 -> p05 must never reuse the old well art/state.
