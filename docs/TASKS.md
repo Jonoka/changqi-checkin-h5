@@ -6,7 +6,7 @@
 
 ## 0. 当前真实状态
 
-**当前轮：微信地点入口直达（2026-09-23，最新版本已部署，微信真机待验）。** 从实际干净 Windows / 远端 HEAD `953291f87e544d301381673edbb46d4d457df6d4` 接续 `feat/a1-wechat-scan`。提交前回读 main 仍为 `cc411965dd384e9608a80abf87a9e883eea8294d`，PR #1 Draft/Open、未合并、Review 为空，未在旧 SHA 上覆盖他人提交。最终 HEAD 以 Git/PR 回读为准，不写自引用 SHA。
+**当前轮：微信地点入口直达（2026-09-23，最新版本已部署，微信真机待验）。** 应用发布源为 `953291f87e544d301381673edbb46d4d457df6d4`；其后仅追加 docs-only 的发布记录提交，均在 `feat/a1-wechat-scan` 上。提交前回读 main 仍为 `cc411965dd384e9608a80abf87a9e883eea8294d`，PR #1 Draft/Open、未合并、Review 为空，未在旧 SHA 上覆盖他人提交。最终 HEAD 以 Git/PR 回读为准，不写自引用 SHA。
 
 微信内有效 `/q/:pointKey` 在会话前校验地点后复用原 snsapi_base，重新识别当前微信用户一次；服务端 oauth 保存 entryPointKey/returnTo/state。回调先捕获已校验地点、消费 state，经真实 code 交换流程 findOrCreateUser，再 regenerateSession 写 userId/有效地点，等待 saveSession 后跳 `/#point/:key`。不依赖入口共享 Cookie，不接受旧 A 会话代替本次 B 授权。既有随机 state 的公开地点提示只供 Cookie 缺失时生成经配置校验的手动重试链接，不作为身份/资格；失败停留错误页，不自动重试或回首页。微信外游客首页/地点引导即使带旧 Cookie 也不显示个人记录/上传，`/q/` 在访问会话存储前返回；`/r/` 匿名、`/stats` 固定凭据、API JSON 401 不变。
 
