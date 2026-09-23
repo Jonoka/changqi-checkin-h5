@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite --config web/vite.config.js",
     "start": "node server/index.js",
-    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs && node --test scripts/a1-unit.test.mjs scripts/a2-unit.test.mjs scripts/a3-unit.test.mjs scripts/a4-unit.test.mjs scripts/a4-image-art.test.mjs scripts/point-qrs.test.mjs",
+    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs && node --test scripts/a1-unit.test.mjs scripts/a2-unit.test.mjs scripts/a3-unit.test.mjs scripts/a4-unit.test.mjs scripts/a4-image-art.test.mjs scripts/point-qrs.test.mjs scripts/ui-polish.test.mjs",
     "test:a1:mysql": "node scripts/check-a1-mysql.mjs",
     "test:a2:mysql": "node scripts/check-a1-mysql.mjs --a2",
     "test:a3:mysql": "node scripts/check-a1-mysql.mjs --a3",

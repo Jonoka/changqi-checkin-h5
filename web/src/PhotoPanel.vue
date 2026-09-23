@@ -148,7 +148,8 @@ onUnmounted(() => {
       <p class="privacy-note">照片不公开展示；已完成地点不替换照片。</p>
     </template>
     <template v-else-if="!enabled"><p>活动暂未开放或已结束，不能上传新照片。</p></template>
-    <template v-else-if="!scanned"><p class="muted">请先使用微信扫一扫或页面内扫一扫打开该地点码。</p><slot name="scan" /><details class="upload-help"><summary>刷新或返回后没有照片？</summary><p>未提交的照片需要重新选择。若本站资格尚未恢复，请扫描本站地点码重新进入。</p></details></template>
+    <!-- App owns the single point-status hint; keep scanner feedback in the scan slot. -->
+    <template v-else-if="!scanned"><slot name="scan" /><details class="upload-help"><summary>刷新或返回后没有照片？</summary><p>未提交的照片需要重新选择。若本站资格尚未恢复，请扫描本站地点码重新进入。</p></details></template>
     <div v-else class="upload-form">
       <figure v-if="preview" class="photo-selection"><img class="photo-preview local-preview" :src="preview" alt="待提交的现场照片预览" @error="message = '当前照片无法预览，请重新拍照或转换为 JPG/PNG'" /><figcaption v-if="file">已选择：{{ file.name }}</figcaption></figure>
       <button v-if="phase === 'unknown'" type="button" class="verify-button" @click="verify">核对保存结果</button>

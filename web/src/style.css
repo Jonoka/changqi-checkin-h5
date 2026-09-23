@@ -137,8 +137,9 @@ button.back-button { color: var(--forest); background: transparent; border: 0; p
 .upload-label small { font-size: 12px; color: var(--muted); }
 .camera-mark { width: 36px; height: 30px; margin-bottom: 3px; fill: none; stroke: #658157; stroke-width: 1.7; }
 .photo-panel input.photo-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.photo-picker:focus-within .upload-label { outline: 3px solid #b7862e; outline-offset: 3px; }
-.has-selection .upload-label { min-height: 44px; padding: 9px 12px; background: transparent; border-style: solid; border-color: var(--line); border-radius: 24px; }
+/* Pointer focus after the native picker is not an extra border; keyboard focus stays visible. */
+.photo-input:focus-visible + .upload-label { outline: 3px solid #b7862e; outline-offset: 3px; }
+.has-selection .upload-label { min-height: 44px; padding: 9px 12px; background: transparent; border: 0; border-radius: 24px; }
 .has-selection .upload-label strong { font-size: 13px; font-weight: 500; }
 .picker-locked { opacity: .55; }
 .picker-locked .upload-label { cursor: not-allowed; }
