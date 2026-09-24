@@ -60,7 +60,7 @@ state/code/微信/会话保存失败停止自动跳转，显示识别错误与�
 
 ### 微信分享卡片
 
-JS-SDK ready 后统一调用 `wx.updateAppMessageShareData` 和 `wx.updateTimelineShareData`；现有 SDK 提供旧分享 API 时只作兼容回退，不另建分享系统。标题固定为“长岐村漫游打卡”，描述固定为“微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。”，图片固定为 `https://cq.fsxinhuo.cn/share/share-card-v1.jpg`，链接固定为 `https://cq.fsxinhuo.cn/`。
+JS-SDK ready 后统一调用 `wx.updateAppMessageShareData` 和 `wx.updateTimelineShareData`；现有 SDK 提供旧分享 API 时只作兼容回退，不另建分享系统。聊天/群聊、朋友圈及旧接口的标题固定为“2026三水区芦苞镇长岐古村黄金节庆影视游园季活动”，HTML 文档 title/og:title 使用同一完整标题，不手工截断或加省略号。`activityName` 和页面内首页 h1 仍为“长岐村漫游打卡”。描述固定为“微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。”，图片固定为 `https://cq.fsxinhuo.cn/share/share-card-v1.jpg`，链接固定为 `https://cq.fsxinhuo.cn/`。
 
 首页、地点 hash、游客 `/#claim` 和匿名 `/r/:claimCode` 均不得把当前 URL 当成分享目标；OAuth `code/state`、`scannedPointKey`、领取码和统计页路径不得进入分享数据。匿名派发页可取得经同域 URL 校验的 JS-SDK 签名，但不因此取得登录身份、照片或领取权限。非微信环境不加载分享 SDK、不报错。SPA HTML 同步提供 title、description、`og:title`、`og:description`、`og:image`、`og:type=website` 和固定 `og:url` 作为兜底。
 

@@ -6,6 +6,18 @@
 
 ## 0. 当前真实状态
 
+### 2026-09-24 · 分享卡片完整标题修正（当前接续，待发布）
+
+开工本地/远端分支 `feat/a1-wechat-scan` 与审阅基准 `69cf9f71adc1c50d8af1a0f9992d970949b66d60` 一致，Windows 全量 porcelain 干净；main 仍为 `cc411965dd384e9608a80abf87a9e883eea8294d`，PR #1 Draft/Open、未合并、Review 为空，无其他开放 PR。用户反馈新海报已显示但标题仍旧；核对确定共享配置及 HTML title/og:title 仍写短名称，原测试只与同一配置比较，不能证明满足完整标题要求。此问题按代码值修正，不归因于缓存。
+
+运行时只改 `WECHAT_SHARE_DATA.title`、HTML title 和 og:title 三个值为“2026三水区芦苞镇长岐古村黄金节庆影视游园季活动”，不截断。聊天/群聊、朋友圈和旧接口回退继续共用配置。描述、`https://cq.fsxinhuo.cn/share/share-card-v1.jpg`、公开入口 `https://cq.fsxinhuo.cn/` 不变；无 document.title 赋值或额外路由分享覆盖。PRD/SPEC 同步当前要求。`config/activity.json.activityName`、首页 h1 仍为“长岐村漫游打卡”，App/匿名派发组件、SDK 初始化/签名/授权、地图 v2、海报字节和单一 lockfile 均未修改。
+
+Node `v24.12.0` / npm `11.6.2` 实际执行：新增独立完整标题期望测试在修正前 **2/2 失败**，明确捕获配置和模拟 SDK 参数中的旧标题；修正后 `npm run check` **72/72**、`npm run build`、`node scripts/a1-unit.test.mjs --built` **16/16**、`git diff --check` 通过。模拟现代/旧 SDK 在首页、带 OAuth 参数的地点 hash、带扫码字段的游客凭证、匿名 `/r/` URL 环境下读取 ready 后实际参数，并逐一重新初始化；标题逐字正确，分享 link 始终是无参数公开首页。源 HTML 与实际构建 HTML、其引用的 `index-sr3tkXpP.js` 中具体分享对象均通过独立期望值检查；产物 JPEG SHA-256 仍为 `c8ccfebc011319b3fb0b5c26356abb5055d7429ff0c0912055d77212a7976db3`。非微信不加载 SDK、扫码取消/失败/重试与原生上传相关既有轻量回归通过；未机械重跑 MySQL/Chrome 全套，不冒称真机或实际浏览器分享通过。
+
+本次只提交推送原分支并同步 PR 正文，未触发 Actions、未部署、无数据库迁移。服务器只读 inspect 确认仍运行旧分享源码 `7365b0d887f99387b5ed6984b5eefcb977614e6c` 的镜像 `changqi-checkin-h5:7365b0d887f9-35995282545-1`；旧 run `35995282545` 不能算本次修复构建。**代码修正与本地构建已通过；线上资源未更新；待新分享卡片真机确认。** 获本次发布授权后仅构建修复提交，核对源码→Actions head_sha→build-info→运行镜像→公网 HTML 及其实际 JS 的分享字段。
+
+真机待验：iOS/Android 关闭旧活动页，重开正式首页并等待身份读取/SDK ready，从首页、地点、游客凭证和已有匿名派发页各新发卡片，不转发聊天中的旧卡片；记录完整配置标题对应的客户端可见行数、新海报及点击落地公开首页。既有授权、扫码、首次上传、领取和纸样用户验收仍保留。以下为原执行记录，短标题和当时验证结果不改写为本次完整标题通过。
+
 **当前轮：微信分享卡片固定公开入口（2026-09-24，本地实现、Actions 构建和生产部署通过；待微信真机确认）。** 开工 Windows 工作区干净，分支 `feat/a1-wechat-scan`、起点/远端 PR #1 head 均为 `f522719f9b8d5e141fbbf995cf7c675d64e0ae52`；实现源为 `7365b0d887f99387b5ed6984b5eefcb977614e6c`，main 仍为 `cc411965dd384e9608a80abf87a9e883eea8294d`。PR #1 保持 Draft/Open、merge state CLEAN，没有 reset、clean、合并或转 Ready。
 
 微信 SDK ready 后统一配置聊天/群聊和朋友圈：标题“长岐村漫游打卡”，描述“微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。”，图片 `https://cq.fsxinhuo.cn/share/share-card-v1.jpg`，链接固定 `https://cq.fsxinhuo.cn/`。首页、地点 hash、游客 `/#claim` 继续复用原 SDK 初始化；匿名 `/r/:claimCode` 只新增同域签名和固定公开分享数据，不取得身份、照片或领取权限。分享内容不读取当前 URL，因此不携带 claimCode、OAuth code/state、scannedPointKey 或统计路径；非微信环境直接跳过分享 SDK。
@@ -289,6 +301,8 @@ A0–A6 下的既往实现/测试记录保留其发生时的边界；当前部�
 可分开写“Actions API 检查已通过；宝塔数据库/微信真机未验证”。本地命令、Actions 日志、服务器结果与真机用户反馈标明来源，不将它们混为一个“全绿”。
 
 ## 4. 接续记录（只维护此处）
+
+**最新接续 · 分享完整标题修正（2026-09-24）：**当前有效标题及实际检查见第0节新增记录；本轮修复尚未发布。待本次发布授权后沿原分支构建修复 SHA，不重跑旧 run；线上资源更新后仍需 iOS/Android 新发卡片验收。下面保留上次发布接续原文，不能视为本次修复已上线。
 
 每个执行任务结束时更新顶部状态、任务表、验收表和下面的当前摘要。避免重复长篇历史；需要的命令输出可放不含敏感数据的测试报告，并在此引用。
 

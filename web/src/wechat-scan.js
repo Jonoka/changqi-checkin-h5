@@ -1,7 +1,7 @@
 let sdkLoading = null
 
 export const WECHAT_SHARE_DATA = Object.freeze({
-  title: '长岐村漫游打卡',
+  title: '2026三水区芦苞镇长岐古村黄金节庆影视游园季活动',
   desc: '微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。',
   imgUrl: 'https://cq.fsxinhuo.cn/share/share-card-v1.jpg',
   link: 'https://cq.fsxinhuo.cn/'

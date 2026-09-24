@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { runtimeConfig } from '../server/runtime.js'
 import { applicationUrl, createWechatClient, parsePointQr, safeReturnTo } from '../server/wechat.js'
@@ -12,6 +13,92 @@ const origin = 'https://activity.example.test'
 const points = [{ key: 'p01', name: '葫芦娃' }, { key: 'p02', name: '卢氏大宗祠' }]
 const testSecret = 'local-test-only-not-a-production-secret'
 const errorCode = (code) => (error) => error.code === code
+const expectedShareTitle = '2026三水区芦苞镇长岐古村黄金节庆影视游园季活动'
+const expectedShareData = {
+  title: expectedShareTitle,
+  desc: '微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。',
+  imgUrl: 'https://cq.fsxinhuo.cn/share/share-card-v1.jpg',
+  link: 'https://cq.fsxinhuo.cn/'
+}
+
+function checkShareHtml(html) {
+  assert.equal(/<title>([^<]*)<\/title>/.exec(html)?.[1], expectedShareTitle)
+  for (const [key, value] of Object.entries({ 'og:title': expectedShareTitle, 'og:description': expectedShareData.desc,
+    'og:image': expectedShareData.imgUrl, 'og:url': expectedShareData.link, 'og:type': 'website', description: expectedShareData.desc })) {
+    assert.equal(new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)"`).exec(html)?.[1], value, key)
+  }
+}
+
+test('share title contract: exact full title and HTML fallback; visible activity name remains short', async () => {
+  assert.deepEqual(WECHAT_SHARE_DATA, expectedShareData)
+  checkShareHtml(await readFile(new URL('../web/index.html', import.meta.url), 'utf8'))
+  const activity = JSON.parse(await readFile(new URL('../config/activity.json', import.meta.url), 'utf8'))
+  assert.equal(activity.activityName, '长岐村漫游打卡')
+  const app = await readFile(new URL('../web/src/App.vue', import.meta.url), 'utf8')
+  assert.match(app, /<h1>\{\{ activity.activityName \}\}<\/h1>/)
+  assert.doesNotMatch(app, /document\.title\s*=|shareData\s*:/)
+  const claim = await readFile(new URL('../web/src/ClaimPage.vue', import.meta.url), 'utf8')
+  assert.match(claim, /initializeWechatShare\(\{ getConfig:/)
+})
+
+test('simulated modern/legacy SDK: all entry URLs and reinitializations retain the complete title and public link', async () => {
+  const originals = Object.fromEntries(['navigator', 'window', 'location'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
+  try {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: 'MicroMessenger simulated' } })
+    for (const legacy of [false, true]) {
+      for (const path of ['/', '/?code=private-code&state=private-state#point/p01', '/?scannedPointKey=p02#claim', '/r/0123456789abcdef0123456789abcdef']) {
+        const location = new URL(path, expectedShareData.link)
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: { location } })
+        Object.defineProperty(globalThis, 'location', { configurable: true, value: location })
+        const calls = []
+        let isReady = false
+        const capture = kind => data => calls.push({ kind, data: { ...data }, isReady })
+        const sdk = {
+          config() { isReady = false }, error() {},
+          ready(callback) { queueMicrotask(() => { isReady = true; callback() }) },
+          [legacy ? 'onMenuShareAppMessage' : 'updateAppMessageShareData']: capture('chat'),
+          [legacy ? 'onMenuShareTimeline' : 'updateTimelineShareData']: capture('timeline')
+        }
+        const options = { loadSdk: async () => sdk, getConfig: async () => ({ appId: 'simulated' }) }
+        const scanner = createScanner({ ...options, state: { phase: 'idle' }, submit() {}, onPoint() {} })
+        try {
+          // App shares through scanner for home/detail/voucher; ClaimPage uses the standalone initializer.
+          for (let attempt = 0; attempt < 2; attempt++) {
+            assert.equal(await (path.startsWith('/r/') ? initializeWechatShare(options) : scanner.initialize()), true)
+          }
+          assert.deepEqual(calls.map(call => call.kind), ['chat', 'timeline', 'chat', 'timeline'])
+          for (const call of calls) {
+            assert.equal(call.isReady, true, 'share must follow wx.ready')
+            assert.deepEqual(call.data, call.kind === 'chat' ? expectedShareData : {
+              title: expectedShareTitle, link: expectedShareData.link, imgUrl: expectedShareData.imgUrl
+            }, `${legacy ? 'legacy' : 'modern'} ${call.kind} ${path}`)
+          }
+        } finally { scanner.dispose() }
+      }
+    }
+  } finally {
+    for (const [key, descriptor] of Object.entries(originals)) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else delete globalThis[key]
+    }
+  }
+})
+
+// Run after npm run build: node scripts/a1-unit.test.mjs --built
+if (process.argv.includes('--built')) test('built HTML and its actual JS share configuration retain the full title', async () => {
+  const html = await readFile(new URL('../web/dist/index.html', import.meta.url), 'utf8')
+  checkShareHtml(html)
+  const bundlePath = /<script[^>]*src="(\/assets\/[^"]+\.js)"/.exec(html)?.[1]
+  assert.ok(bundlePath)
+  const bundle = await readFile(new URL(`../web/dist${bundlePath}`, import.meta.url), 'utf8')
+  const shareObject = /Object\.freeze\(\{title:[^{}]*imgUrl:[^{}]*\}\)/.exec(bundle)?.[0]
+  assert.ok(shareObject, 'inspect the share object, not unrelated page copy')
+  for (const [key, value] of Object.entries(expectedShareData)) {
+    assert.equal(new RegExp(`${key}:([\x60'"])(.*?)\\1`).exec(shareObject)?.[2], value, key)
+  }
+  const image = await readFile(new URL('../web/dist/share/share-card-v1.jpg', import.meta.url))
+  assert.equal(createHash('sha256').update(image).digest('hex'), 'c8ccfebc011319b3fb0b5c26356abb5055d7429ff0c0912055d77212a7976db3')
+})
 
 // These tests simulate WeChat network responses / native SDK callbacks, not actual WeChat devices.
 test('runtime: explicit mock mode only; production cannot fall back to a demonstration', () => {
@@ -165,8 +252,8 @@ test('share-only SDK setup is silent outside WeChat and always publishes the fix
     }
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: 'MicroMessenger simulated' } })
     assert.equal(await initializeWechatShare({ loadSdk: async () => sdk, getConfig: async () => ({ appId: 'simulated', jsApiList: ['updateAppMessageShareData'] }) }), true)
-    assert.deepEqual(calls.appShare, WECHAT_SHARE_DATA)
-    assert.deepEqual(calls.timelineShare, { title: WECHAT_SHARE_DATA.title, link: WECHAT_SHARE_DATA.link, imgUrl: WECHAT_SHARE_DATA.imgUrl })
+    assert.deepEqual(calls.appShare, expectedShareData)
+    assert.deepEqual(calls.timelineShare, { title: expectedShareTitle, link: expectedShareData.link, imgUrl: expectedShareData.imgUrl })
     assert.equal(calls.config.debug, false)
   } finally {
     if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator)
@@ -207,8 +294,8 @@ test('simulated SDK: only wx.ready enables scanning; cancellation, denied permis
   assert.equal(await h.scanner.scan(), false)
   h.callbacks.ready()
   await initializing
-  assert.deepEqual(h.callbacks.appShare, WECHAT_SHARE_DATA)
-  assert.deepEqual(h.callbacks.timelineShare, { title: WECHAT_SHARE_DATA.title, link: WECHAT_SHARE_DATA.link, imgUrl: WECHAT_SHARE_DATA.imgUrl })
+  assert.deepEqual(h.callbacks.appShare, expectedShareData)
+  assert.deepEqual(h.callbacks.timelineShare, { title: expectedShareTitle, link: expectedShareData.link, imgUrl: expectedShareData.imgUrl })
   assert.equal(new URL(h.callbacks.appShare.link).href, 'https://cq.fsxinhuo.cn/')
   assert.doesNotMatch(h.callbacks.appShare.link, /claimCode|code=|state=|scannedPointKey|\/r\//i)
   for (const outcome of ['cancel', 'fail']) {
