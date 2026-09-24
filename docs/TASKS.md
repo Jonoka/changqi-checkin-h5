@@ -21,7 +21,7 @@
 
 **边界：**六图母版/派生、地图比例/热点、CQ 范围、锁文件/依赖和数据库结构未改。五处固定正式二维码载荷/码图不变，生成器的离线页和印刷说明已同步，可给旧包附 `docs/point-qr-entry-correction.md`，不要求重印码图。本次仅更新项目镜像与既有 app 容器，未改公众号菜单、消息服务、其他站点或生产数据。iOS/Android 微信真实授权（包括已关注/未关注、原菜单换入口、同设备换账号）、五地点拍照/相册/复扫/领取与真实纸样仍待验，不把本地模拟等同真机，不恢复强制关注规则。
 
-**2026-09-24 最新发布：**远端 `feat/a1-wechat-scan` 已同步至 `b64460743205033fefa33adff2321013a87404b0`。Actions run `35950810377` / attempt 1 成功，artifact `changqi-image-b64460743205-35950810377-1` 未过期；`build-info.json` 确认 `linux/amd64`、镜像 `changqi-checkin-h5:b64460743205-35950810377-1`，归档 SHA-256 `edd606c70249dbb699f543b144a7773099dcdbd204961aceb5288942d3069824` 与 sidecar 一致。已下载到 `tmp/release-35950810377`，上传至 `/opt/changqi-checkin-h5/releases/35950810377` 并 `docker load`；生产镜像 ID `sha256:b193ec7fa0e5410e5945b6f5ef5b8b7e7a84870498fad18a522061b273c031f4`，容器保持 `network_mode: bridge`、`127.0.0.1:3002`。幂等 schema、HTTPS `/health`（database connected）、`/api/activity` 五点、`/q/p01`、WebP、未登录 `401`、无效领取 `404`、`/stats` `401`、HTTP `301`、容器重启后健康和 Windows 外部 HTTPS 检查均通过。回滚备份：`/opt/changqi-checkin-h5/backups/.env.runtime.before-35950810377`、`compose.before-35950810377.yaml`、`cq.fsxinhuo.cn.conf.before-35950810377`；旧镜像仍保留。
+**2026-09-24 最新发布：**本次部署源为 `b64460743205033fefa33adff2321013a87404b0`；发布记录随后以 docs-only commit `a2a5c27268750cd7497961289c75e07371c5c4ab` 推送，当前分支 HEAD 与生产源码明确区分。Actions run `35950810377` / attempt 1 成功，artifact `changqi-image-b64460743205-35950810377-1` 未过期；`build-info.json` 确认 `linux/amd64`、镜像 `changqi-checkin-h5:b64460743205-35950810377-1`，归档 SHA-256 `edd606c70249dbb699f543b144a7773099dcdbd204961aceb5288942d3069824` 与 sidecar 一致。已下载到 `tmp/release-35950810377`，上传至 `/opt/changqi-checkin-h5/releases/35950810377` 并 `docker load`；生产镜像 ID `sha256:b193ec7fa0e5410e5945b6f5ef5b8b7e7a84870498fad18a522061b273c031f4`，容器保持 `network_mode: bridge`、`127.0.0.1:3002`。幂等 schema、HTTPS `/health`（database connected）、`/api/activity` 五点、`/q/p01`、WebP、未登录 `401`、无效领取 `404`、`/stats` `401`、HTTP `301`、容器重启后健康和 Windows 外部 HTTPS 检查均通过。回滚备份：`/opt/changqi-checkin-h5/backups/.env.runtime.before-35950810377`、`compose.before-35950810377.yaml`、`cq.fsxinhuo.cn.conf.before-35950810377`；旧镜像仍保留。
 
 ### 六图接入及先前发布记录（历史边界）
 
@@ -238,7 +238,7 @@ A0–A6 下的既往实现/测试记录保留其发生时的边界；当前部�
 
 每个执行任务结束时更新顶部状态、任务表、验收表和下面的当前摘要。避免重复长篇历史；需要的命令输出可放不含敏感数据的测试报告，并在此引用。
 
-**当前接续（2026-09-24）：**地图现场方位/线路修正已同步至远端 `feat/a1-wechat-scan` 的 `b64460743205033fefa33adff2321013a87404b0`；本地 `npm run check` 62/62、`npm run build`、`git diff --check` 通过。项目级 `.agents/skills/changqi-release/SKILL.md` 已由 `quick_validate.py` 校验通过；该 Skill 驱动 Actions run `35950810377` 全部通过，artifact 已校验并替换生产容器，HTTPS、关键只读接口、外部 Windows HTTPS 和容器重启检查通过。旧镜像/环境/反代备份保留；微信真机、真实照片/领取和纸样仍待验。
+**当前接续（2026-09-24）：**地图现场方位/线路修正的部署源为 `b64460743205033fefa33adff2321013a87404b0`；随后仅追加 docs-only commit `a2a5c27268750cd7497961289c75e07371c5c4ab`。本地 `npm run check` 62/62、`npm run build`、`git diff --check` 通过。项目级 `.agents/skills/changqi-release/SKILL.md` 已由 `quick_validate.py` 校验通过；该 Skill 驱动 Actions run `35950810377` 全部通过，artifact 已校验并替换生产容器，HTTPS、关键只读接口、外部 Windows HTTPS 和容器重启检查通过。旧镜像/环境/反代备份保留；微信真机、真实照片/领取和纸样仍待验。
 
 <details>
 <summary>A5/A6 与首次部署历史（保留原记录，不是本轮 UI 状态）</summary>
