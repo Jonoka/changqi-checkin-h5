@@ -7,6 +7,7 @@ import multer from 'multer'
 import { HttpError } from './http.js'
 import { requireUserSession, userProgress } from './identity.js'
 import { findCheckin, maxPhotoBytes, processPhoto, storedPhotoPath } from './photos.js'
+import { mountPhotoReplacement, validPhotoRevision, photoConflict } from './photo-replacement.js'
 
 function validPoint(activity, key) {
   if (typeof key !== 'string' || !activity.points.some((point) => point.key === key)) {
@@ -17,6 +18,7 @@ function validPoint(activity, key) {
 const uploadFailed = () => new HttpError(500, 'UPLOAD_FAILED', '照片暂时无法保存，请刷新状态后重试')
 
 export function mountCheckins(app, { pool, runtime, activityConfig }) {
+  mountPhotoReplacement(app, { pool, runtime, activityConfig })
   const requireUser = requireUserSession(pool, runtime)
   const photoLimit = Math.min(maxPhotoBytes, activityConfig.rules.maxPhotoBytes)
   const upload = multer({
@@ -53,7 +55,7 @@ export function mountCheckins(app, { pool, runtime, activityConfig }) {
       if (request.aborted) throw uploadFailed()
       const pointKey = validPoint(activityConfig, request.body?.pointKey)
       if (Object.keys(request.body).some((key) => key !== 'pointKey')) throw new HttpError(400, 'INVALID_UPLOAD', '上传字段不正确')
-      // A successful record is immutable; a repeat returns the saved state without decoding/replacing its photo.
+      // First-upload retries NEVER replace a saved photo. Explicit PUT has its own revision protocol.
       if (await findCheckin(pool, request.currentUser.id, pointKey)) {
         return await userProgress(pool, request.currentUser, activityConfig, runtime.publicOrigin)
       }
@@ -109,6 +111,11 @@ export function mountCheckins(app, { pool, runtime, activityConfig }) {
     const pointKey = validPoint(activityConfig, request.params.pointKey)
     const record = await findCheckin(pool, request.currentUser.id, pointKey)
     if (!record) throw new HttpError(404, 'PHOTO_NOT_FOUND', '尚无该地点的照片记录')
+    const revision = request.query.revision
+    if (revision !== undefined && !validPhotoRevision(revision)) throw new HttpError(400, 'INVALID_REVISION', '照片版本不正确')
+    if (revision !== undefined && revision !== record.photo_revision) throw photoConflict()
+    const owner = `CQ${String(request.currentUser.id).padStart(6, '0')}`
+    if (request.query.owner !== undefined && request.query.owner !== owner) throw new HttpError(409, 'PHOTO_OWNER_CHANGED', '当前用户已变化，请重新读取照片')
     const filename = storedPhotoPath(runtime.uploadDir, record.photo_path)
     let file
     try {
@@ -116,9 +123,11 @@ export function mountCheckins(app, { pool, runtime, activityConfig }) {
       if (!stats.isFile() || stats.isSymbolicLink()) throw new Error('Not a stored photo')
       file = await fs.open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
     } catch {
+      const current = await findCheckin(pool, request.currentUser.id, pointKey)
+      if (current?.photo_revision !== record.photo_revision) throw photoConflict()
       throw new HttpError(410, 'PHOTO_MISSING', '照片已不可用，历史打卡记录仍然有效')
     }
-    response.set({ 'Cache-Control': 'private, no-store', 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline; filename="checkin.jpg"' })
+    response.set({ 'X-Photo-Revision': record.photo_revision, 'X-Photo-Owner': owner, 'Cache-Control': 'private, no-store', 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline; filename="checkin.jpg"' })
     response.vary('Cookie')
     try { await pipeline(file.createReadStream(), response) } catch {
       if (!response.destroyed) response.destroy()

@@ -8,6 +8,7 @@ COPY web ./web
 RUN npm run build
 COPY server ./server
 COPY config ./config
+# Includes additive db/migrations modules used by db:schema on existing databases.
 COPY db ./db
 COPY scripts/apply-schema.mjs ./scripts/apply-schema.mjs
 RUN npm prune --omit=dev

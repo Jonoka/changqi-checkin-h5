@@ -2,13 +2,13 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { claimWithRecovery } from './claim-action.js'
 
-const props = defineProps({ state: Object, enabled: Boolean, label: String, confirmation: String, confirmLabel: String, submit: Function, readState: Function })
+const props = defineProps({ state: Object, enabled: Boolean, blocked: Boolean, label: String, confirmation: String, confirmLabel: String, submit: Function, readState: Function })
 const emit = defineEmits(['state', 'busy', 'locked', 'login-required'])
 const phase = ref('idle')
 const message = ref('')
 const confirming = ref(false)
 const busy = computed(() => ['saving', 'verifying'].includes(phase.value))
-const allowed = computed(() => props.enabled && props.state.allCompleted && !props.state.claimedAt)
+const allowed = computed(() => !props.blocked && props.enabled && props.state.allCompleted && !props.state.claimedAt)
 let alive = true
 function report(error, verifying = false) {
   if (error.code === 'NEED_LOGIN') emit('login-required', error)
@@ -46,6 +46,7 @@ async function verify() {
 }
 watch(phase, value => emit('locked', value === 'unknown'), { flush: 'sync' })
 watch(() => props.state.claimedAt, (value) => { if (value) confirming.value = false })
+watch(() => props.blocked, value => { if (value) confirming.value = false })
 onUnmounted(() => { alive = false; emit('busy', false); emit('locked', false) })
 </script>
 

@@ -3,6 +3,22 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
+import net from 'node:net'
+import { randomInt } from 'node:crypto'
+
+async function debuggingPort() {
+  // Avoid WHATWG bad ports (notably 10080, which Windows can allocate with port=0).
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const server = net.createServer(), port = randomInt(20000, 60000)
+    try {
+      await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) })
+      await new Promise(resolve => server.close(resolve))
+      return port
+    } catch (error) { if (error.code !== 'EADDRINUSE' && error.code !== 'EACCES') throw error }
+  }
+  throw new Error('No available loopback Chrome debugging port')
+}
+
 import { setTimeout as delay } from 'node:timers/promises'
 import { createA4Capture, pointerClick } from './check-a4-browser.mjs'
 
@@ -12,7 +28,8 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
   const expectedProgress = `0/${totalCount}`
   const profile = path.join(directory, 'browser-profile')
   await fs.mkdir(profile, { recursive: true })
-  const browser = spawn(executable, ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' })
+  const debugPort = await debuggingPort()
+  const browser = spawn(executable, ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' })
   let socket
   let nextId = 0
   let sessionId
@@ -47,15 +64,25 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
   const capture = visual ? createA4Capture({ call, evaluate, directory }) : async () => {}
   const ready = () => waitFor(`${buttonExpression('扫一扫打卡')} && !${buttonExpression('扫一扫打卡')}.disabled`, 'scan ready')
   try {
-    let portData
+    let endpoint
     for (let attempt = 0; attempt < 100; attempt++) {
-      try { portData = await fs.readFile(path.join(profile, 'DevToolsActivePort'), 'utf8'); break } catch { await delay(50) }
+      try {
+        const response = await fetch(`http://127.0.0.1:${debugPort}/json/version`, { signal: AbortSignal.timeout(500) })
+        endpoint = (await response.json()).webSocketDebuggerUrl
+        if (endpoint) break
+      } catch { /* Wait only for the dedicated browser started by this test. */ }
       assert.equal(browser.exitCode, null, 'Installed browser exited before remote debugging was ready')
+      await delay(50)
     }
-    assert.ok(portData, 'No debugging endpoint from the dedicated test browser')
-    const [port, endpoint] = portData.trim().split(/\r?\n/)
-    socket = new WebSocket(`ws://127.0.0.1:${port}${endpoint}`)
-    await once(socket, 'open')
+    assert.ok(endpoint?.startsWith(`ws://127.0.0.1:${debugPort}/devtools/browser/`), 'No matching loopback debugging endpoint')
+    socket = new WebSocket(endpoint)
+    await new Promise((resolve, reject) => {
+      const fail = () => { cleanup(); reject(new Error('Dedicated Chrome debugging connection failed')) }
+      const open = () => { cleanup(); resolve() }
+      const timer = setTimeout(fail, 10000)
+      function cleanup() { clearTimeout(timer); socket.removeEventListener('open', open); socket.removeEventListener('error', fail); socket.removeEventListener('close', fail) }
+      socket.addEventListener('open', open); socket.addEventListener('error', fail); socket.addEventListener('close', fail)
+    })
     socket.addEventListener('message', ({ data }) => {
       const response = JSON.parse(data)
       if (response.method) for (const listener of eventListeners.get(response.method) || []) listener(response.params)
@@ -141,8 +168,13 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await waitFor(buttonExpression('重新准备扫一扫'), 'SDK retry button')
     await click('重新准备扫一扫')
     await ready()
+    const reloaded = new Promise(resolve => {
+      const unsubscribe = observeEvent('Page.loadEventFired', () => { unsubscribe(); resolve() })
+    })
     await call('Page.reload')
+    await reloaded
     await ready()
+    await waitFor('document.querySelector(".point-count")', 'identity progress after completed page reload')
     assert.equal(await evaluate(`document.querySelector('.point-count').textContent.trim()`), expectedProgress)
     await afterScan()
 

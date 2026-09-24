@@ -14,6 +14,14 @@ const versionFiles = [
   'server/wechat.js',
   'server/http.js',
   'server/checkins.js',
+  'server/photo-replacement.js',
+  'server/photos.js',
+  'server/claims.js',
+  'db/schema.sql',
+  'db/migrations/001-photo-revision.mjs',
+  'web/src/SavedPhoto.vue',
+  'web/src/photo-replacement.js',
+  'web/src/api.js',
   'web/src/App.vue',
   'web/src/VillageMap.vue',
   'web/src/PointArt.vue',
@@ -282,6 +290,7 @@ export async function checkA4LastPoint({ call, evaluate, waitFor, buttonExpressi
   assert.equal(await evaluate('Boolean(document.querySelector(".staff-claim"))'), false)
   assert.equal(await evaluate(`Boolean(${buttonExpression('已完成奖品派发')})`), false)
   assert.equal(await evaluate('Boolean(document.querySelector(".claim-panel"))'), true)
+  await waitFor(`document.querySelectorAll('.voucher-photos img.saved-photo').length === ${totalCount} && [...document.querySelectorAll('.voucher-photos img.saved-photo')].every(image => image.naturalWidth > 0)`, 'all saved photos on owner voucher after final point')
   await capture('own-voucher-after-last')
 }
 

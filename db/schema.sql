@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS checkins (
   user_id BIGINT UNSIGNED NOT NULL,
   point_key VARCHAR(32) NOT NULL,
   photo_path VARCHAR(255) NOT NULL,
+  photo_revision VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'initial',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_checkins_user_point (user_id, point_key),

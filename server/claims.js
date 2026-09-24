@@ -19,25 +19,34 @@ export function publicClaimState(state) {
 
 export async function markClaimed(pool, userId, source, activity, publicOrigin) {
   if (!['self', 'staff'].includes(source)) throw new Error('Invalid server claim source')
+  let connection, committing = false, destroyed = false
   try {
-    let user = await findUser(pool, userId)
+    connection = await pool.getConnection()
+    await connection.beginTransaction()
+    // Same lock and ordering as explicit photo replacement; no late photo switch after a claim.
+    const [rows] = await connection.execute('SELECT id, claim_code, claimed_at FROM users WHERE id = ? FOR UPDATE', [userId])
+    let user = rows[0]
     if (!user) throw invalidClaim()
-    // A repeat remains successful even after closure; never overwrite the first time/source.
-    if (user.claimed_at) return await userProgress(pool, user, activity, publicOrigin)
+    const state = await userProgress(connection, user, activity, publicOrigin)
+    if (user.claimed_at) { await connection.rollback(); return state }
     if (!activity.enabled) throw new HttpError(409, 'ACTIVITY_DISABLED', '活动暂未开放或已结束，不能首次确认领取')
-    const state = await userProgress(pool, user, activity, publicOrigin)
     if (!state.allCompleted) throw new HttpError(409, 'NOT_COMPLETED', '尚未完成全部地点，不能确认领取')
-    if (!activity.enabled) throw new HttpError(409, 'ACTIVITY_DISABLED', '活动暂未开放或已结束，不能首次确认领取')
-    // Fixed required-key set and immutable successful check-ins: the conditional update resolves races.
-    await pool.execute('UPDATE users SET claimed_at = NOW(), claim_source = ? WHERE id = ? AND claimed_at IS NULL', [source, userId])
-    user = await findUser(pool, userId)
+    await connection.execute('UPDATE users SET claimed_at = NOW(), claim_source = ? WHERE id = ? AND claimed_at IS NULL', [source, userId])
+    user = await findUser(connection, userId)
     if (!user?.claimed_at) throw new Error('Claim write not confirmed')
-    return await userProgress(pool, user, activity, publicOrigin)
+    const saved = await userProgress(connection, user, activity, publicOrigin)
+    committing = true
+    await connection.commit()
+    return saved
   } catch (error) {
+    if (connection) {
+      if (committing) { connection.destroy(); destroyed = true }
+      else { try { await connection.rollback() } catch { connection.destroy(); destroyed = true } }
+    }
     if (error instanceof HttpError) throw error
     console.error('Claim save could not be confirmed')
     throw new HttpError(500, 'SAVE_FAILED', '领取结果暂时无法确认，请先刷新核对状态，不要重复派发礼品')
-  }
+  } finally { if (connection && !destroyed) connection.release() }
 }
 
 function requireClaimRequest(request, runtime) {

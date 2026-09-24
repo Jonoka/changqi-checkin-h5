@@ -29,7 +29,7 @@ npm start
 
 开发页面可单独运行 `npm run dev`，默认访问 `http://localhost:5173`；后端默认监听 `http://localhost:3000`。没有填写数据库凭据时，开发环境仍可打开公开活动页；填写 `DB_*` 后启动会实际执行 `SELECT 1`。生产环境会拒绝缺少必需密钥或开启 `DEV_MOCK_ENABLED` 的配置。
 
-配置校验由 `npm run check` 执行，当前地点数量从 `config/activity.json` 动态读取。建表前准备好目标数据库后运行 `npm run db:schema`；脚本只创建 `users` 和 `checkins` 两张业务表。
+配置校验由 `npm run check` 执行，当前地点数量从 `config/activity.json` 动态读取。建表前准备好目标数据库后运行 `npm run db:schema`；脚本创建 `users` 和 `checkins` 两张业务表，并执行 `db/migrations/001-photo-revision.mjs` 的幂等增量升级：已有库只补 `photo_revision`，默认 `initial`，不清库或重建记录。升级账号需要该表 ALTER 权限；生产迁移须另获本次发布授权。
 
 ### 身份、会话与开发入口
 
@@ -43,7 +43,7 @@ npm start
 
 ### 照片存储与上传
 
-`POST /api/checkins` 使用 `pointKey` 与单个 `photo` 的 multipart 表单，身份和扫码地点来自服务端会话。仅成功保存文件及 MySQL 记录后改变进度。`GET /api/me/photos/:pointKey` 只读取会话本人照片；存储目录不公开映射，不提供修改、删除或覆盖首图的接口。
+`POST /api/checkins` 使用 `pointKey` 与单个 `photo` 的 multipart 表单，身份和扫码地点来自服务端会话。仅成功保存文件及 MySQL 记录后改变进度。已有该地点记录时，普通首次上传/重试只返回已有记录，不覆盖已保存照片。`GET /api/me/photos/:pointKey` 只读取会话本人照片；存储目录不公开映射。显式替换走独立版本协议，不删除或重建打卡。
 
 开发默认 `UPLOAD_DIR=./var/uploads`，也可显式指定独立目录。生产必须是应用包与前端目录之外的绝对持久路径，沿用现有 Compose 的 `/var/lib/changqi/uploads` 挂载；不要将数据库或照片放进源码/构建产物。应用账号需有创建、写入及清理自身临时文件的目录权限。
 
@@ -51,9 +51,21 @@ npm start
 
 上传中禁重复提交；请求失败先读本人状态，无法确认时要求先核对而非盲目重传。刷新通过已鉴权 `/api/me.scannedPointKey` 恢复服务端有效资格，不从 URL 推断；不会保留尚未提交的文件。直达上传使用原生 file input，不依赖 SDK ready；SDK 故障不清空已识别身份。保存后的照片已清理时返回 `410 / PHOTO_MISSING`，历史进度仍保留。
 
+### 凭证照片与领奖前单张替换
+
+游客自己的 `/#claim` 按游客编号/完成状态、现场核查提示、配置顺序 N 张照片、领取码/操作展示。照片来自已鉴权服务器字节，手机单列完整显示，可逐张重试和查看大图。工作人员当面看游客手机，不保存审核通过/驳回状态；匿名 `/r/:claimCode` 不读取或修改照片。
+
+`GET /api/me/photos` 返回 `{userLabel, enabled, claimedAt, photos:[{pointKey, revision, createdAt, canReplace}]}`。`PUT /api/me/photos/:pointKey` 接收 multipart 的 `photo`、`expectedRevision`、`replacementId`，只替换活动开启、本人已有且未领取的照片，无需重扫；身份只取服务端会话。字节读取附 `revision` 与 `owner` 一致性条件（不是身份选择器），响应 `X-Photo-Revision`/`X-Photo-Owner` 与真实文件匹配，始终 no-store。新增 PUT 字段限制为两个文本字段、一个文件和有界 parts，不放宽首次上传限制。
+
+详情和凭证共用 `PhotoPanel` / `SavedPhoto`。一次只编辑一张，旧照片与未提交新预览分开；取消不写服务器，确认后更新原行路径和版本，进度、原打卡时间、领取码及人数不变。编辑时隐藏可出示二维码、禁用本页领取；上传/核对/结果未知保护 hash/back，不能卸载丢失未决状态。已领取或活动关闭只读。
+
+每次明确的新替换使用一个随机 UUID；重试复用同 ID 和旧 revision。恢复只看照片 revision，不以 completedKeys 冒充替换成功；旧版本仍可能有请求在执行，保持待核对或同 ID 重试，其他新版本提示冲突。sessionStorage 只保存按已鉴权用户编号/地点隔离的最小标记与文件摘要，不存照片/Cookie/OpenID，也不是身份凭据。刷新丢失的待提交文件须重选；未决重试只接受同一文件。核对成功后重新读服务器照片再恢复领取操作。
+
+上传/解码先完成，再在同一 connection 的短事务中按 users→checkin 加锁，和 self/staff 首次领取协调。确定失败保留旧图；COMMIT 不明且回读失败保留可能有效的新旧图，返回待核对；新引用确认后才清理旧图，清理失败记录待清理，不误报已完成替换失败。没有照片历史表、后台审批或跨设备审核锁。
+
 ### 领取与只读人数
 
-本人 `POST /api/me/claim` 与持码派发 `POST /api/r/:claimCode/claim` 都使用空 JSON 对象 `{}`，服务端固定渠道，客户端不传用户或渠道。两条路径共用首次条件更新，重复操作不增加人数、不覆盖首次时间。读取 `/r/:claimCode` 或其公开数据接口不会写入；持链接即可确认是已约定的简化，不代表员工认证。派发页不显示照片或 OpenID。领取结果不明时先刷新核对，切勿因此重复派发实物。
+本人 `POST /api/me/claim` 与持码派发 `POST /api/r/:claimCode/claim` 都使用空 JSON 对象 `{}`，服务端固定渠道，客户端不传用户或渠道。两条路径共用同一 users 行锁及首次条件更新，与照片替换串行提交；重复操作不增加人数、不覆盖首次时间。读取 `/r/:claimCode` 或其公开数据接口不会写入；持链接即可确认是已约定的简化，不代表员工认证。派发页不显示照片或 OpenID。领取结果不明时先刷新核对，切勿因此重复派发实物。
 
 人数仅在 `/stats` 服务器渲染，没有未保护的数据接口或管理菜单。使用现成 `express-basic-auth` 固定凭据保护，在本地或服务器环境文件中配置 `STATS_USER` 和 `STATS_PASSWORD`；两项同时为空时关闭查询并返回 503，绝不退回公开访问。用户名使用字母、数字、点、下划线或连字符，密码使用至少 16 字符的安全随机值，不使用演示密码。该凭据只供负责人只读查询，不是员工账号。浏览器通过标准 Basic Auth 提示输入；生产必须使用现有 HTTPS 入口，凭据不放 URL、Git 或前端变量。
 
@@ -83,7 +95,7 @@ $env:TEST_BROWSER_EXECUTABLE = 'C:\Program Files\Google\Chrome\Application\chrom
 npm run test:a1:mysql
 ```
 
-A4/A5 执行 `npm run test:a4:mysql`，复用相同隔离 MySQL/Chrome 并包含 A1–A3 回归，不必再重复运行各阶段全套。必须设置已有 `TEST_BROWSER_EXECUTABLE` 才包含实际浏览器检查；默认生成 `tmp/changqi_a1_test_*/a4-screenshots.json` 及 320/390/430px PNG，未配置浏览器会明确 SKIP，不算画面通过。
+A4/A5 执行 `npm run test:a4:mysql`，复用相同隔离 MySQL/Chrome 并包含 A1–A3 回归，不必再重复运行各阶段全套。该入口还覆盖凭证照片、显式替换、故障/并发、增量迁移及替换后的进程重启。必须设置已有 `TEST_BROWSER_EXECUTABLE` 才包含实际浏览器检查；默认生成 `tmp/changqi_a1_test_*/a4-screenshots.json` 及 320/390/430px PNG，未配置浏览器会明确 SKIP，不算画面通过。
 
 没有运行时/素材变化时，可显式设置 `$env:TEST_A4_REUSE_EVIDENCE='tmp/已确认的A4证据目录'`。脚本核对该目录的运行时文件清单、SHA 指纹和截图文件存在后，仍执行所有宽度的实时 DOM/布局、触控、文案及业务断言，但不机械重截整套图片；本次结果另写 `a4-regression.json`，保留旧证据不改名、不冒称新截图。指纹不符或证据缺失会失败，须按影响范围补证据；不需要复用时移除该环境变量。浏览器模拟 SDK 和自动截图均不代替微信真机。
 
@@ -119,6 +131,7 @@ npm run qr:points -- --origin http://localhost:5173 --out tmp/point-qrs-local-te
 - `server/`：Express 应用与 MySQL 连接
 - `config/activity.json`：唯一活动配置来源
 - `db/schema.sql`：业务表建表脚本
+- `db/migrations/001-photo-revision.mjs`：已有库幂等补列；由 `db:schema` 执行，随 `db/` 进入运行镜像
 - `Dockerfile`、`compose.yaml`：单 `app` 容器发布准备
 - `.github/workflows/build-image.yml`：Actions 检查、单平台镜像导出与 artifact
 

@@ -1,8 +1,8 @@
 # SPEC · 长岐村漫游打卡
 
-**v1.5 · 2026-09-23 · 微信地点入口自动识别并直达上传；其余精简范围不变**
+**v1.6 · 2026-09-24 · 本人凭证照片现场核查与领奖前显式替换**
 
-本文件承接 [PRD.md](PRD.md)，替代旧 TSD。它规定必须发生的行为和最低技术约定，不新增管理平台或防刷模块。示例不代表代码已经存在；真实微信权限尚未核验。
+本文件承接 [PRD.md](PRD.md)，替代旧 TSD。它规定必须发生的行为和最低技术约定，不新增管理平台或防刷模块。示例不代表已经执行验收；本地、用户已确认的微信真机结果与本轮新增能力分别记录在 TASKS。
 
 ## S01 · 配置与活动开关
 
@@ -74,9 +74,21 @@ state/code/微信/会话保存失败停止自动跳转，显示识别错误与�
 
 上传中禁用重复提交；失败不点亮。超时先重新查询本人记录：已成功则展示完成，确实未成功才让游客重试。刷新导致本地未上传文件丢失时提示重选，不承诺断点续传。
 
-成功记录不提供修改、删除或覆盖。已完成地点的重复请求返回已有结果，不报成系统故障。普通会话失效时先重新登录恢复进度；尚未完成且扫码信息丢失，则提示重新扫码。
+首次 POST /api/checkins 重试仍不覆盖已有记录。显式替换使用独立 PUT 协议，只更新已有记录的 photo_path 与 photo_revision，不改变进度、原时间、用户、地点或领取信息。普通会话失效时先重新登录恢复进度；尚未完成且扫码信息丢失，则提示重新扫码。
 
 本人照片通过会话鉴权接口读取，不直接暴露磁盘路径，不让其他游客或派发页查看。照片用途提示：“照片用于本次活动打卡记录，不公开展示。”结束后的清理由运营通知后人工安排；照片已清理不能使历史打卡失效，也不建设自动清理模块。
+
+### 2026-09-24 · 现场核查和显式替换
+
+GET /api/me/photos 返回本人照片元数据、revision、可修改状态；PUT /api/me/photos/:pointKey 接收 photo、expectedRevision、replacementId。身份只取会话；仅活动开启、本人已有且未领取可新修改，无需重扫。每次新操作随机 UUID，重试复用原 ID 与旧版本；当前同 ID 只确认，其他新版本冲突。photo_revision 初值 initial，幂等增量迁移兼容旧记录，不清库。
+
+先处理新图和随机文件，再同 connection 短事务按 users→checkin 加锁，检查领取、归属与版本，原行原子更新路径/版本。两路领取共用 users 行锁。确认新引用后才删旧文件；确定失败留旧图，COMMIT 不明且回读失败保留可能有效的新旧图并返回待核对；旧文件清理失败记录待清理，不误报替换失败。
+
+替换恢复不看 completedKeys：版本等于本次 ID 才成功；仍为旧版本且请求未决只能继续核对或同 ID 受控重试；其他版本冲突；查询失败保持锁。sessionStorage 只存按已鉴权游客编号/地点隔离的最小未决标记和文件摘要，不存照片/Cookie/OpenID，不作为身份。刷新恢复记录，未提交文件需重选。
+
+/#claim 按编号/完成状态→核查提示→配置顺序 N 张完整照片→二维码/领取展示，默认手机单列，逐张加载/失败重试/大图。卡片原地单张编辑，复用详情 PhotoPanel，保留旧图并区别待提交预览，提供确认替换照片/取消修改；取消不写入，成功读服务器新图并留本页。编辑时隐藏码并禁本页领取，上传/核对/未知持锁并保护 hash/back，不因卸载丢状态。已领取/活动关闭只读。不保存人工审核状态，不增加跨设备审核锁；匿名 /r 不具照片权限。
+
+图片按用户+地点+revision读取，no-store，响应声明版本必须对应真实字节；丢弃迟到响应/旧用户图片并释放 blob URL。增量迁移必须进入运行镜像；本轮仅本地测试不迁移生产，回退保留兼容字段和游客数据。
 
 ## S05 · 进度和页面状态
 
@@ -99,7 +111,7 @@ state/code/微信/会话保存失败停止自动跳转，显示识别错误与�
 | 重复或两边同时确认 | 返回同一领取结果，计数只增加 1，不覆盖首次时间/渠道 |
 | 网络或保存失败 | 不显示假成功；先查询最新状态，再决定是否重试 |
 
-两条接口复用 `markClaimed(userId, source)`。用户已领取直接返回原结果；否则确认活动开启且全部完成，再执行一次条件更新并重新读取数据库结果：
+两条接口复用 `markClaimed(userId, source)`。同一个 connection 开启短事务，先 SELECT users FOR UPDATE，与显式照片替换共用锁顺序。用户已领取返回原结果；否则确认活动开启且全部完成，再条件更新、读取结果并 COMMIT。异常 rollback/release；COMMIT 回应未知销毁该连接，由客户端重新核对，不当作未发生：
 
 ```sql
 UPDATE users
@@ -137,7 +149,7 @@ FROM users WHERE claimed_at IS NOT NULL;
 | 表 | 必需字段与约束 |
 | --- | --- |
 | users | `id BIGINT UNSIGNED` 主键；`openid VARCHAR(64)` 唯一且区分大小写；`claim_code CHAR(32)` 唯一；`claimed_at DATETIME NULL`；`claim_source VARCHAR(8) NULL`；`created_at DATETIME` |
-| checkins | `id BIGINT UNSIGNED` 主键；`user_id BIGINT UNSIGNED` 关联 users；`point_key VARCHAR(32)`；`photo_path VARCHAR(255)`；`created_at DATETIME`；`UNIQUE(user_id, point_key)` |
+| checkins | `id BIGINT UNSIGNED` 主键；`user_id BIGINT UNSIGNED` 关联 users；`point_key VARCHAR(32)`；`photo_path VARCHAR(255)`；`photo_revision VARCHAR(36) ascii_bin NOT NULL DEFAULT 'initial'`；`created_at DATETIME`；`UNIQUE(user_id, point_key)` |
 
 领取码区分大小写并由安全随机函数生成；无需加密业务表。SQL 使用参数化查询。外部只输出显示编号，例如 CQ000123；不返回 OpenID、数据库口令或服务器路径。时间在本项目统一按中国标准时间 UTC+8，API 输出含 `+08:00` 的时间串。
 
@@ -155,7 +167,9 @@ JSON 正常结果统一 `{ok:true,data:{...}}`；错误统一 `{ok:false,error:{
 | GET /api/wechat/js-config?url=... | 校验同域页面 URL 后生成配置，不输出 AppSecret |
 | POST /api/scan | JSON `{result:扫描原始文本}`；返回 `{point,alreadyCompleted}`，保存扫码地点到会话 |
 | POST /api/checkins | multipart：`pointKey`、`photo`；保存后返回本人状态 |
-| GET /api/me/photos/:pointKey | 仅本人读取已保存图片；清理后返回明确无图状态 |
+| GET /api/me/photos | 会话本人 `{userLabel,enabled,claimedAt,photos}`，按配置排序；每项 `pointKey,revision,createdAt,canReplace`，无磁盘路径 |
+| GET /api/me/photos/:pointKey | 仅本人字节；revision/owner 一致性条件可选，前端必传；返回对应 X-Photo-Revision/X-Photo-Owner，no-store，缺图 410 |
+| PUT /api/me/photos/:pointKey | multipart：photo、expectedRevision、replacementId；只更新本人已有记录，返回最新照片元数据；不需要再次扫码 |
 | POST /api/me/claim | 本人确认，渠道 self；返回本人最新状态 |
 | GET /q/:pointKey | 先校验地点；微信内重新 OAuth 并直达，微信外仅引导；回调成功且活动开放才登记会话资格 |
 | GET /r/:claimCode | 派发页，只读打开，不要求员工登录 |
@@ -163,7 +177,7 @@ JSON 正常结果统一 `{ok:true,data:{...}}`；错误统一 `{ok:false,error:{
 | POST /api/r/:claimCode/claim | 对该游客确认派发，渠道 staff；返回同一公开状态 |
 | GET /stats | 固定凭据保护的只读人数页；可直接服务端渲染，不强制多写一个 API |
 
-常见错误：`NEED_LOGIN` 401；`PLEASE_SCAN` 403；`INVALID_POINT`/`INVALID_CLAIM_CODE` 404；`INVALID_QR` 400；`IMAGE_TOO_LARGE` 413；`UNSUPPORTED_IMAGE` 415；`NOT_COMPLETED`/`ACTIVITY_DISABLED` 409；保存失败 `UPLOAD_FAILED` 或 `SAVE_FAILED` 500。前端显示可理解提示与重试路径，服务端记录异常，不向游客泄露堆栈或凭据。
+常见错误：替换专用 `PHOTO_CONFLICT`/`PHOTO_OWNER_CHANGED`/`ALREADY_CLAIMED` 409、`PHOTO_NOT_FOUND` 404、`INVALID_REPLACEMENT` 400、确定失败 `REPLACEMENT_FAILED` 500、未决 `REPLACEMENT_UNCERTAIN` 503。`NEED_LOGIN` 401；`PLEASE_SCAN` 403；`INVALID_POINT`/`INVALID_CLAIM_CODE` 404；`INVALID_QR` 400；`IMAGE_TOO_LARGE` 413；`UNSUPPORTED_IMAGE` 415；`NOT_COMPLETED`/`ACTIVITY_DISABLED` 409；保存失败 `UPLOAD_FAILED` 或 `SAVE_FAILED` 500。前端显示可理解提示与重试路径，服务端记录异常，不向游客泄露堆栈或凭据。
 
 ### 必要环境配置
 
@@ -248,6 +262,10 @@ Nginx 请求体限制与 15 MiB 图片上限一致留余量。`UPLOAD_DIR` 挂�
 | AC-12 | 手机无横向溢出，按钮可操作；地名正确、只有照片方式；所有进度为真实数据 | 浏览器截图 |
 | AC-13 | 两种入口可触发同一工作流；下载镜像的 SHA/平台与部署版本一致；单应用容器复用宝塔 MySQL；重启/更新不丢数据；生产禁用模拟、凭据不入镜像或 Git | Actions + 部署/代码检查 |
 | AC-14 | 五处原载荷不变，微信直扫与页内扫都到正确地点且保存照片才完成；游客领取码仍匿名派发；更新说明、真实纸样与 iOS/Android 均实测 | 样张 + 微信真机 |
+| AC-15 | 本人凭证按配置 N 张真实服务器照片、完整大图/重试、单张原地编辑与取消；活动开启、未领取的已有记录才允许替换且无需复扫；匿名派发不具照片权限；编辑期间二维码/本人确认锁定 | API + 浏览器 + 新增微信真机 |
+| AC-16 | 只更新原行照片/版本；同ID恢复、版本冲突、确定失败/COMMIT不明文件安全、self/staff领取锁顺序、图片字节/迟到响应隔离、幂等旧库升级及重启恢复 | MySQL + 浏览器 + 迁移专项 |
+
+新增照片能力单独验收：N 张本人服务器照片/大图/失败重试、用户隔离与匿名边界；已有记录无须复扫替换、首次 POST 门禁/重试保护；2/N 与 N/N 替换的记录/时间/人数不变；取消/解码/文件/SQL失败保留旧图；同版本并发、同ID重试/冲突、响应丢失/连续核对失败/COMMIT不明；两路领取先后竞争；版本字节一致、迟到响应/返回/切用户及blob释放；空库/旧库/重复迁移/旧图首替/重启；320/390/430凭证列表/编辑/错误/未知/成功/只读/缺图/own-voucher-after-last。模拟不计新增微信真机结果。
 
 用两个不同微信身份完成全流程，分别验证游客确认与扫码派发。生产数据验收只核对增量，不清空真实数据以凑测试人数。所有实际结果集中记入 TASKS，不凭文档或模拟结果勾选真机通过。
 

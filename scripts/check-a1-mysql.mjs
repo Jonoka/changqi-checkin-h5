@@ -22,6 +22,8 @@ import { checkA3Mysql, checkA3Restart } from './check-a3-mysql.mjs'
 import { checkA3Browser } from './check-a3-browser.mjs'
 import { checkA4Pages, checkA4LastPoint } from './check-a4-browser.mjs'
 import { checkEntryMysql, checkEntryBrowser } from './check-entry.mjs'
+import { checkPhotoReplacementMysql, checkPhotoReplacementRestart } from './check-photo-replacement-mysql.mjs'
+import { checkPhotoReplacementBrowser } from './check-photo-replacement-browser.mjs'
 const includeA4 = process.argv.includes('--a4')
 const includeA3 = process.argv.includes('--a3') || includeA4
 const includeA2 = process.argv.includes('--a2') || includeA3
@@ -133,7 +135,7 @@ function simulatedWechat(publicOrigin) {
         if (code === 'network-failure') throw new Error('simulated private upstream error')
         if (code === 'invalid-code') return { ok: true, json: async () => ({ errcode: 40029, errmsg: 'simulated invalid code' }) }
         if (code === 'non-json') return { ok: true, json: async () => { throw new Error('simulated non-JSON') } }
-        assert.ok(['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser', 'a3-a', 'a3-b', 'a3-race', 'a3-closed', 'a3-incomplete', 'a3-ui-self', 'a3-ui-staff', 'entry-a', 'entry-b', 'entry-ui-a', 'entry-ui-b', 'entry-once'].includes(code), 'Unrecognized mock code must not establish identity')
+        assert.ok(/^photo-test-[a-z0-9-]{1,32}$/.test(code) || ['user-a', 'user-b', 'proxy-user', 'a2-user-a', 'a2-user-b', 'a2-browser', 'a3-a', 'a3-b', 'a3-race', 'a3-closed', 'a3-incomplete', 'a3-ui-self', 'a3-ui-staff', 'entry-a', 'entry-b', 'entry-ui-a', 'entry-ui-b', 'entry-once'].includes(code), 'Unrecognized mock code must not establish identity')
         return { ok: true, json: async () => ({ openid: `simulated-${code}`, access_token: 'simulated-oauth-token' }) }
       }
       if (url.pathname === '/cgi-bin/stable_token') return { ok: true, json: async () => ({ access_token: 'simulated-token', expires_in: 7200 }) }
@@ -411,6 +413,8 @@ try {
     a3 = await checkA3Mysql({ pool, settings: { ...settings, database }, activity, runtime: proxyApp.runtime, baseUrl: 'http://localhost:5173', directory: tempDirectory, browser, oauth, ok })
   }
   const entry = includeA3 ? await checkEntryMysql({ pool, activity, baseUrl: 'http://localhost:5173', browser, oauth, samplePath: a2.samplePath, store: sessions.store, ok }) : null
+  let photoChecks
+  const runPhotoChecks = () => checkPhotoReplacementMysql({ pool, settings: { ...settings, database }, activity, runtime: proxyApp.runtime, sessionMiddleware: sessions.middleware, baseUrl: 'http://localhost:5173', directory: tempDirectory, browser, oauth, ok })
   if (process.env.TEST_BROWSER_EXECUTABLE) {
     const rowsBeforeBrowser = await count('checkins')
     await checkA1Browser({
@@ -447,6 +451,11 @@ try {
           ok('Direct entry Chrome: actual /q OAuth redirect/callback, loading/upload/completed/claimed views, SDK failure independence, account switch, late-state protection and native photo save; WeChat simulated')
         }
         if (includeA4) {
+          photoChecks = await runPhotoChecks()
+          await checkPhotoReplacementBrowser({ ...tools, ...photoChecks, activity, origin: 'http://localhost:5173' })
+          ok('PHOTO actual Chrome: N saved images/full size, one inline editor, cancel/error/unknown, durable same-ID recovery, pending SQL commit, shared detail revision, late responses/user isolation and claimed/closed/missing states at 320/390/430px')
+        }
+        if (includeA4) {
           if (process.env.TEST_A4_REUSE_EVIDENCE) {
             console.log(`A4 live regression: ${path.relative(process.cwd(), tempDirectory)}/a4-regression.json; unchanged visual evidence reused from ${process.env.TEST_A4_REUSE_EVIDENCE}`)
           } else {
@@ -460,6 +469,7 @@ try {
   } else {
     console.log('SKIP optional rendered-browser check: TEST_BROWSER_EXECUTABLE not supplied (simulated SDK unit checks run in npm run check)')
   }
+  if (includeA4 && !photoChecks) photoChecks = await runPhotoChecks()
   await vite.close(); vite = null
   await closeApp()
   ok('ACTUAL Vite :5173 proxy reaches :3000 API, OAuth start/callback and /q guide; callback returns to the frontend origin')
@@ -467,6 +477,7 @@ try {
   if (includeA2) {
     await checkA2Restart({ start: startRealProcess, stop: stopRealProcess, browser, directory: tempDirectory, pool, ok })
   }
+  if (includeA4) await checkPhotoReplacementRestart({ start: startRealProcess, stop: stopRealProcess, browser, directory: tempDirectory, ok })
   if (includeA3) await checkA3Restart({ start: startRealProcess, stop: stopRealProcess, browser, pool, activity, directory: tempDirectory, ok })
   console.log(`${includeA4 ? 'A1+A2+A3+A4' : includeA3 ? 'A1+A2+A3' : includeA2 ? 'A1+A2' : 'A1'} MySQL checks passed: ${passed}; actual MySQL/process restart/proxy, SIMULATED WeChat network, no camera/device claim`)
 } finally {

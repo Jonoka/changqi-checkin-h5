@@ -2,21 +2,18 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { api } from './api.js'
 import { uploadWithRecovery } from './photo-upload.js'
+import SavedPhoto from './SavedPhoto.vue'
 
-const props = defineProps({ point: Object, me: Object, enabled: Boolean, scanned: Boolean, maxBytes: Number })
-const emit = defineEmits(['state', 'busy', 'locked', 'login-required', 'scan-required', 'continue', 'claim'])
+const props = defineProps({ point: Object, me: Object, enabled: Boolean, scanned: Boolean, maxBytes: Number, gallery: Boolean, disabled: Boolean })
+const emit = defineEmits(['state', 'busy', 'locked', 'login-required', 'scan-required', 'continue', 'claim', 'editing', 'photo-state'])
 const file = ref(null)
 const preview = ref('')
 const input = ref(null)
 const phase = ref('idle')
 const message = ref('')
-const photoUrl = ref('')
-const photoMessage = ref('')
-const photoLoading = ref(false)
 const completed = computed(() => props.me.completedKeys.includes(props.point.key))
 const busy = computed(() => ['uploading', 'verifying'].includes(phase.value))
 let alive = true
-let photoAttempt = 0
 
 function clearSelection() {
   if (preview.value) URL.revokeObjectURL(preview.value)
@@ -94,39 +91,12 @@ async function verify() {
     }
   } finally { if (alive) emit('busy', false) }
 }
-async function loadPhoto() {
-  const attempt = ++photoAttempt
-  if (photoUrl.value) URL.revokeObjectURL(photoUrl.value)
-  photoUrl.value = ''
-  photoMessage.value = ''
-  if (!completed.value) return
-  photoLoading.value = true
-  try {
-    const response = await fetch(`/api/me/photos/${encodeURIComponent(props.point.key)}`, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(12000) })
-    if (!response.ok) {
-      const payload = await response.json()
-      const error = new Error(payload.error?.message || '照片暂时无法读取，请重试')
-      error.code = payload.error?.code
-      throw error
-    }
-    if (!response.headers.get('content-type')?.startsWith('image/jpeg')) throw new Error('照片响应异常，请重试')
-    const blob = await response.blob()
-    if (alive && attempt === photoAttempt) photoUrl.value = URL.createObjectURL(blob)
-  } catch (error) {
-    if (alive && attempt === photoAttempt) {
-      photoMessage.value = error.message || '照片暂时无法读取，请重试'
-      if (error.code === 'NEED_LOGIN') emit('login-required', error)
-    }
-  } finally { if (alive && attempt === photoAttempt) photoLoading.value = false }
-}
 // Keep the existing recovery state mounted when hash/back navigation is attempted.
 watch(phase, value => emit('locked', value === 'unknown'), { flush: 'sync' })
-watch(completed, (value) => { if (value) clearSelection(); void loadPhoto() }, { immediate: true })
+watch(completed, (value) => { if (value) clearSelection() }, { immediate: true })
 onUnmounted(() => {
   alive = false
-  photoAttempt++
   clearSelection()
-  if (photoUrl.value) URL.revokeObjectURL(photoUrl.value)
   emit('busy', false)
   emit('locked', false)
 })
@@ -134,19 +104,14 @@ onUnmounted(() => {
 
 <template>
   <div class="photo-panel" :data-phase="phase" :aria-busy="busy">
-    <div v-if="completed" class="success-card" role="status">
+    <div v-if="completed && !gallery" class="success-card" role="status">
       <div class="success-copy"><span class="success-mark" aria-hidden="true">✓</span><div><h3>{{ phase === 'success' ? '打卡成功' : '本站已完成' }}</h3><p>{{ point.name }} · 已保存现场照片</p></div></div>
       <p v-if="me.claimedAt">已领取礼品，感谢参与这次漫游。</p><p v-else-if="!enabled">活动已结束，已有记录仍可查看。</p><p v-else-if="me.allCompleted">全部地点已完成，可以查看领取凭证。</p>
-      <button v-if="me.allCompleted && enabled && !me.claimedAt" type="button" class="success-next" @click="emit('claim')">查看领取凭证</button>
-      <button v-else type="button" class="success-next" @click="emit('continue')">{{ me.claimedAt ? '返回地图' : '继续探索' }}</button>
+      <button v-if="me.allCompleted && enabled && !me.claimedAt" type="button" class="success-next" :disabled="disabled" @click="emit('claim')">查看领取凭证</button>
+      <button v-else type="button" class="success-next" :disabled="disabled" @click="emit('continue')">{{ me.claimedAt ? '返回地图' : '继续探索' }}</button>
     </div>
-    <template v-if="completed">
-      <p v-if="photoLoading" role="status">正在读取照片…</p>
-      <img v-if="photoUrl" class="photo-preview saved-photo" :src="photoUrl" :alt="`${point.name}：打卡照片`" />
-      <p v-if="photoMessage" role="status">{{ photoMessage }}</p>
-      <button v-if="photoMessage" type="button" class="secondary" @click="loadPhoto">重试读取照片</button>
-      <p class="privacy-note">照片不公开展示；已完成地点不替换照片。</p>
-    </template>
+    <SavedPhoto v-if="completed || gallery" :point="point" :me="me" :enabled="enabled" :max-bytes="maxBytes" :disabled="disabled"
+      @busy="emit('busy', $event)" @locked="emit('locked', $event)" @editing="emit('editing', $event)" @photo-state="emit('photo-state', $event)" @login-required="emit('login-required', $event)" />
     <template v-else-if="!enabled"><p>活动暂未开放或已结束，不能上传新照片。</p></template>
     <!-- App owns the single point-status hint; keep scanner feedback in the scan slot. -->
     <template v-else-if="!scanned"><slot name="scan" /><details class="upload-help"><summary>刷新或返回后没有照片？</summary><p>未提交的照片需要重新选择。若本站资格尚未恢复，请扫描本站地点码重新进入。</p></details></template>

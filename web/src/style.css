@@ -148,7 +148,7 @@ button.back-button { color: var(--forest); background: transparent; border: 0; p
 .claim-panel { padding: 22px 18px; margin: 18px 0; background: #fffbec; border: 1px solid #ddd3ae; border-radius: 18px; text-align: center; }
 .claim-panel p { font-size: 13px; }
 .claim-heading { text-align: center; margin: 18px 0; }
-.claim-heading h2 { font-family: "STKaiti","KaiTi",serif; font-size: 30px; }
+.claim-heading h2 { font-family: "STKaiti","KaiTi",serif; font-size: 30px; outline: none; }
 .voucher-owner { display: flex; align-items: center; justify-content: center; gap: 8px; overflow-wrap: anywhere; }
 .voucher-owner strong { font-size: 17px; }
 .point-heading h2, #map-title { scroll-margin-top: 20px; }
@@ -185,6 +185,21 @@ button.back-button { color: var(--forest); background: transparent; border: 0; p
 .error-card, .loading { margin: 0 auto; padding: 50px 24px; text-align: center; width: min(100%,480px); }
 .error-card button { display: block; width: 100%; margin-top: 24px; }
 .loading h1 { margin-top: 20px; }
+/* Owner-only inspection: full saved frames, one visible column, one inline editor. */
+.claim-panel .photo-inspection-note { text-align: left; padding: 12px; background: var(--leaf); border-radius: 10px; margin-top: 16px; }
+.voucher-photos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; list-style: none; padding: 0; margin: 20px 0 26px; }
+.voucher-photo-card { min-width: 0; padding: 14px 10px; background: var(--cream); border: 1px solid var(--line); border-radius: 12px; text-align: left; }
+.voucher-photo-card > h4 { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; font-size: 16px; }
+.voucher-photo-card .saved-photo { width: 100%; height: auto; max-height: none; object-fit: contain; }
+.saved-photo-label { color: var(--muted); font-size: 12px; }
+.saved-photo-panel > button, .replacement-editor > button { display: block; width: 100%; margin-top: 10px; }
+.replacement-editor { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.replacement-editor h4 { margin: 0; font-size: 16px; }
+.photo-dialog { width: min(96vw, 1000px); max-width: 96vw; max-height: 95vh; max-height: 95dvh; padding: 14px; border: 0; border-radius: 12px; background: var(--cream); color: var(--ink); }
+.photo-dialog::backdrop { background: #142019d9; }
+.photo-dialog img { display: block; width: 100%; height: auto; max-height: 75vh; max-height: 75dvh; object-fit: contain; }
+.photo-dialog .close-photo { width: 100%; position: sticky; top: 0; }
+.photo-dialog p { font-size: 14px; }
 @media (min-width: 600px) { .page-shell { padding: 28px 0; } .activity-card { min-height: calc(100vh - 56px); border-radius: 22px; } .village-hero { border-radius: 22px 22px 0 0; } }
 @media (max-width: 350px) { .page-content { padding-inline: 14px; } .progress-strip { padding-inline: 12px; } .point-count { font-size: 25px; } .brand-note { display: none; } .point-button { gap: 6px; } .point-heading h2 { font-size: 25px; } .staff-claim { padding-inline: 18px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

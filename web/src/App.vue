@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { api, post } from './api.js'
+import { firstPending } from './photo-replacement.js'
 import { createScanner, loadWechatSdk } from './wechat-scan.js'
 import PhotoPanel from './PhotoPanel.vue'
 import ClaimPanel from './ClaimPanel.vue'
@@ -17,6 +18,7 @@ const identityMessage = ref('')
 const selectedKey = ref('')
 const claimView = ref(false)
 const photoUncertain = ref(false)
+const photoEditing = ref(false)
 const claimUncertain = ref(false)
 const scanNotice = ref('')
 const scannedKey = ref('')
@@ -28,7 +30,7 @@ const scannerState = reactive({ phase: 'idle', message: '' })
 const inWechat = /MicroMessenger/i.test(navigator.userAgent)
 const signatureUrl = window.location.href.split('#')[0]
 const selectedPoint = computed(() => activity.value?.points.find((point) => point.key === selectedKey.value))
-const operationLocked = computed(() => uploadBusy.value || claimBusy.value || photoUncertain.value || claimUncertain.value)
+const operationLocked = computed(() => photoEditing.value || uploadBusy.value || claimBusy.value || photoUncertain.value || claimUncertain.value)
 const identityProps = computed(() => ({ me: me.value, activity: activity.value, inWechat, identityState: identityState.value, identityMessage: identityMessage.value, locked: operationLocked.value }))
 const scanProps = computed(() => ({ activity: activity.value, me: me.value, inWechat, state: scannerState, locked: operationLocked.value, demoBusy: demoBusy.value, demoResult: demoResult.value }))
 // IdentityStatus owns loading/login/error copy; photo/scanner panels retain real failure feedback.
@@ -60,7 +62,22 @@ function updateMe(state) {
   if (Object.hasOwn(state, 'scannedPointKey')) {
     scannedKey.value = activity.value?.enabled && activity.value.points.some(point => point.key === state.scannedPointKey) ? state.scannedPointKey : ''
   }
+  if (!sameUser) {
+    const pending = firstPending(state.userLabel, activity.value?.points || [])
+    if (pending) {
+      claimView.value = pending.view === 'claim'
+      selectedKey.value = claimView.value ? '' : pending.pointKey
+      const hash = claimView.value ? '#claim' : `#point/${pending.pointKey}`
+      history.replaceState(null, '', `${location.pathname}${location.search}${hash}`)
+    }
+  }
   me.value = state
+}
+
+function updatePhotoState(inventory) {
+  if (inventory.userLabel !== me.value?.userLabel) return
+  if (!inventory.enabled) activity.value.enabled = false
+  if (inventory.claimedAt && !me.value.claimedAt) updateMe({ ...me.value, claimedAt: inventory.claimedAt })
 }
 function setUploadBusy(value) {
   uploadBusy.value = value
@@ -271,8 +288,8 @@ onUnmounted(() => {
           <IdentityStatus v-bind="identityProps" compact @refresh="loadMe()" @login="startLogin" />
           <p v-if="pointNotice" class="scan-notice muted">{{ pointNotice }}</p>
           <PhotoPanel v-if="me" :key="`${me.userLabel}:${selectedPoint.key}`" :point="selectedPoint" :me="me"
-            :enabled="activity.enabled" :scanned="scannedKey === selectedPoint.key" :max-bytes="Math.min(activity.rules.maxPhotoBytes, 15 * 1024 * 1024)"
-            @state="updateMe" @busy="setUploadBusy" @locked="photoUncertain = $event" @login-required="loginFailure" @scan-required="scannedKey = ''" @continue="backHome" @claim="viewClaim">
+            :enabled="activity.enabled" :disabled="operationLocked" :scanned="scannedKey === selectedPoint.key" :max-bytes="Math.min(activity.rules.maxPhotoBytes, 15 * 1024 * 1024)"
+            @state="updateMe" @busy="setUploadBusy" @locked="photoUncertain = $event" @editing="photoEditing = $event" @photo-state="updatePhotoState" @login-required="loginFailure" @scan-required="scannedKey = ''" @continue="backHome" @claim="viewClaim">
             <template #scan><ScanControls v-bind="scanProps" @scan="scanner.scan" @prepare="scanner.initialize" @demo-scan="demoScan" @update:demo-result="demoResult = $event" /></template>
           </PhotoPanel>
           <ScanControls v-else v-bind="scanProps" @scan="scanner.scan" @prepare="scanner.initialize" @demo-scan="demoScan" @update:demo-result="demoResult = $event" />
@@ -284,7 +301,7 @@ onUnmounted(() => {
         <section v-else-if="claimView" class="own-claim-view" aria-labelledby="claim-title">
           <header class="claim-heading"><p class="eyebrow">你的长岐漫游记录</p><h2 id="claim-title" tabindex="-1">领取凭证</h2></header>
           <IdentityStatus v-bind="identityProps" compact @refresh="loadMe()" @login="startLogin" />
-          <ClaimPanel v-if="me" :key="me.userLabel" :me="me" :activity="activity" @state="updateMe" @busy="setClaimBusy" @locked="claimUncertain = $event" @login-required="loginFailure" />
+          <ClaimPanel v-if="me" :key="me.userLabel" :me="me" :activity="activity" @editing="photoEditing = $event" @photo-busy="setUploadBusy" @photo-locked="photoUncertain = $event" @photo-state="updatePhotoState" @state="updateMe" @busy="setClaimBusy" @locked="claimUncertain = $event" @login-required="loginFailure" />
           <button v-if="me" type="button" class="text-button" :disabled="operationLocked" @click="loadMe()">刷新状态</button>
         </section>
 

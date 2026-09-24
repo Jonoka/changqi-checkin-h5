@@ -110,6 +110,24 @@ docker compose --env-file .env.runtime -f compose.yaml logs --tail=100 app
 
 检查页面/API、日志、数据库连接及旧照片和进度；微信授权、页内扫码和真实相册由真机另验。容器运行不等于微信业务通过；运行失败记录原因，保留原数据。需要回退时将 APP_IMAGE 改回保留的上一版并更新 app，不恢复旧游客数据库、不删除数据卷。只需保留当前/上一版镜像并观察磁盘，不做自动清理平台或零停机集群。
 
+### 照片版本增量升级与回退
+
+包含照片替换能力的源码需要 `checkins.photo_revision`。`npm run db:schema` 先执行建表兼容脚本，再调用 `db/migrations/001-photo-revision.mjs`：查询 information_schema；缺列时仅添加 `VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'initial'`；存在时验证定义，不改行、不重置已替换的 UUID。旧照片、checkin id/created_at、用户及领取记录保持。迁移账号需要 ALTER；缺权限或定义冲突即停止，不通过清库重建解决。
+
+Dockerfile 的 `COPY db` 同时带入 `db/migrations/`，运行镜像的 `scripts/apply-schema.mjs` 可直接导入它。生产启动本身不自动迁移。本轮仅准备/本地测试，不执行生产迁移、不沿用之前发布授权。
+
+获本次发布/迁移授权后，先备份数据库与持久照片，核对目标库和镜像版本；加载同一 artifact、将 APP_IMAGE 指向待发布镜像后，在启动新版 app **之前**执行以下一次性命令（不是在旧容器里跑旧脚本）：
+
+```bash
+docker compose --env-file .env.runtime -f compose.yaml run --rm --no-deps --pull never app npm run db:schema
+# 仅迁移成功才更新 app；服务仍使用原持久照片挂载和宝塔 MySQL。
+docker compose --env-file .env.runtime -f compose.yaml up -d --no-build --pull never app
+```
+
+该 ADD COLUMN 可能等待数据库元数据锁，安排已授权的维护窗口并观察实际退出状态；不要将超时直接当作未执行，重试前检查列定义。可重复运行，但不增加版本账本或历史照片表。升级失败保持旧 app；回退只改 APP_IMAGE，保留 photo_revision 兼容字段以及全部游客的新旧记录，不用旧备份覆盖新数据。旧版本应用不提供显式替换，但可继续读现有路径。
+
+日志中的旧文件清理待办只在数据库引用已经核实后人工处理；COMMIT 结果未知时保留可能有效的新旧文件，不按文件日期批量删除。只记录随机文件 basename，不输出游客照片、Cookie 或连接凭据。
+
 ## 7. 授权边界
 
 用户准备给本地 Agent 服务器连接权限；连接可用性以实际 SSH 配置和成功读取为准。明确发布任务与目标后，在该授权范围内连续完成下载、上传、加载、更新和检查，不逐条重复请求确认。单纯开发/改文档/请求构建不视为允许修改生产；公众号菜单、其他消息服务、删除数据另行确认。

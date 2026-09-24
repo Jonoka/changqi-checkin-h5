@@ -2,7 +2,7 @@ export async function api(path, options = {}) {
   const { timeoutMs = 12000, ...requestOptions } = options
   let response
   try {
-    response = await fetch(path, { credentials: 'same-origin', ...requestOptions, signal: requestOptions.signal || AbortSignal.timeout(timeoutMs) })
+    response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...requestOptions, signal: requestOptions.signal || AbortSignal.timeout(timeoutMs) })
   } catch {
     throw new Error('网络暂时不可用，请检查连接后重试')
   }
@@ -11,6 +11,7 @@ export async function api(path, options = {}) {
   if (!response.ok || payload?.ok !== true) {
     const error = new Error(payload?.error?.message || '请求失败，请稍后重试')
     error.code = payload?.error?.code
+    error.status = response.status
     throw error
   }
   return payload.data

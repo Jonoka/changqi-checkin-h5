@@ -43,5 +43,7 @@ test('UI polish: native selection and unknown-result locks are retained', () => 
   assert.match(panel, /<label class="upload-label" :for="`photo-\$\{point\.key\}`"/)
   assert.match(panel, /if \(!chosen\) return/, 'Cancelling a reselect keeps the previous selection')
   assert.match(panel, /if \(busy\.value \|\| phase\.value === 'unknown'\) return/)
-  assert.match(panel, /已完成地点不替换照片/, 'Saved photos remain immutable')
+  // 2026-09-24: explicit replacement is separate; first-upload duplicate guard remains intact.
+  assert.match(panel, /!props\.scanned \|\| !props\.enabled \|\| completed\.value\) return/)
+  assert.match(panel, /<SavedPhoto v-if="completed \|\| gallery"/, 'Voucher and completed detail share the explicit replacement component')
 })

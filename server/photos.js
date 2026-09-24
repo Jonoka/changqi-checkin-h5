@@ -36,6 +36,6 @@ export function storedPhotoPath(directory, filename) {
 }
 
 export async function findCheckin(pool, userId, pointKey) {
-  const [rows] = await pool.execute('SELECT photo_path FROM checkins WHERE user_id = ? AND point_key = ?', [userId, pointKey])
+  const [rows] = await pool.execute('SELECT photo_path, photo_revision, created_at FROM checkins WHERE user_id = ? AND point_key = ?', [userId, pointKey])
   return rows[0] || null
 }
