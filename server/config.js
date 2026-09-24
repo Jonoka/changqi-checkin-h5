@@ -36,7 +36,6 @@ export function validateActivityConfig(config) {
   requiredString(config.activityName, 'activityName')
   if (typeof config.enabled !== 'boolean') throw new Error('enabled must be a boolean')
   requiredString(config.claimLocationText, 'claimLocationText')
-  optionalMapPosition(config.claimMapPosition, 'claimMapPosition')
   if (!config.rules || typeof config.rules !== 'object') throw new Error('rules must be an object')
   if (config.rules.photoRequired !== true) throw new Error('rules.photoRequired must be true')
   if (!Number.isInteger(config.rules.maxPhotoBytes) || config.rules.maxPhotoBytes <= 0) throw new Error('rules.maxPhotoBytes must be a positive integer')
@@ -85,7 +84,6 @@ export function publicActivityConfig(config) {
     enabled: config.enabled,
     rules: config.rules,
     claimLocationText: config.claimLocationText,
-    claimMapPosition: config.claimMapPosition ?? null,
     wechat: config.wechat,
     points: [...config.points].sort((a, b) => a.displayOrder - b.displayOrder)
   }

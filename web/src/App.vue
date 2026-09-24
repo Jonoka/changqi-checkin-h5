@@ -298,7 +298,7 @@ onUnmounted(() => {
           </section>
           <ScanControls v-else v-bind="scanProps" @scan="scanner.scan" @prepare="scanner.initialize" @demo-scan="demoScan" @update:demo-result="demoResult = $event" />
           <p v-if="!me?.allCompleted && !me?.claimedAt && activity.enabled" class="claim-hint">集齐 {{ activity.points.length }} 处照片印记后，可前往现场领取礼品。</p>
-          <VillageMap :points="activity.points" :claim-position="activity.claimMapPosition" :completed-keys="me?.completedKeys || []" :logged-in="Boolean(me)" :disabled="operationLocked" @view="viewPoint" />
+          <VillageMap :points="activity.points" :completed-keys="me?.completedKeys || []" :logged-in="Boolean(me)" :disabled="operationLocked" @view="viewPoint" />
           <details class="point-disclosure">
             <summary>查看全部地点（{{ activity.points.length }}处）</summary>
             <ul class="point-list">

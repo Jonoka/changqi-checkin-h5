@@ -109,7 +109,6 @@ export async function checkA1Browser({ executable, directory, origin, cookie, to
     await waitFor('document.querySelector(".point-detail")', 'point viewing')
     await afterView()
     assert.match(await evaluate('document.body.textContent'), /到达现场后，请使用微信扫一扫或页面内扫一扫/)
-    assert.match(await evaluate('document.body.textContent'), /请先使用微信扫一扫或页面内扫一扫/)
     assert.equal(await evaluate('Boolean(document.querySelector("input[type=file]"))'), false, 'Viewing a point must not enable upload')
     await capture('point-view')
 

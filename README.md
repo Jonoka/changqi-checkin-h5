@@ -63,9 +63,9 @@ npm start
 
 首页/示意地图、照片上传与成功、领取/派发沿用同一 Vue 页面和已有接口；地图节点只查看，不提供扫码资格。引导、授权错误与人数页使用服务端同风格模板，构建前仍可返回文字和错误状态。页面不依赖外部字体服务。
 
-当前插画使用 [RASTER_HANDOFF](assets/illustrations/restoration/RASTER_HANDOFF.md) 对应的六张独立 PNG 母版，原字节保存在 `assets/illustrations/restoration/masters/`，来源、生成记录和用户确认范围见 `masters-import-manifest.json`。它们依据聊天参考生成，不是旧效果图逐像素裁切或 SVG 转码；地图与古井素材已确认，另外四张用于接入预览。历史原 PNG、裁图清单和 `village-art.mjs` 均保留，后者不进入当前生成链路；本次接入不重新生图或裁旧图。
+五张地点详情插画继续使用 [RASTER_HANDOFF](assets/illustrations/restoration/RASTER_HANDOFF.md) 对应的独立 PNG 母版和 WebP；原字节、来源、生成记录及确认边界仍由 `masters-import-manifest.json` 记录。页面地图改用用户最终确认的完整成图：PNG 母版为 `assets/illustrations/restoration/masters/map-field-final-v1.png`，运行资源为 `/art/map-field-final-v1.webp`。图内已经包含五个编号和地点名、粉色路线及兑奖处，页面只叠加五个透明查看热点，不再绘制可见路线、点位或兑奖处。旧地图母版、旧运行图、历史裁图清单和 `village-art.mjs` 均保留用于追溯与回退，不进入当前页面。
 
-将实际导入并目视技术核对的 PNG/WebP 保存到 `assets/illustrations/restoration/masters/`，在 `recipe.json` 的各项 `master` 中记录 `path/sha256/width/height/method/reviewed` 后，才运行 `node scripts/prepare-a4-art.mjs` 派生带版本的新 WebP 与运行清单。缺母版、哈希/尺寸不符或存在未知手工改图时，在写入前停止；不回退到 SVG、不自动填占位图，保存的图像编辑结果不宣称模型可逐像素重现。生成完成仍须将资源与实际尺寸接入配置/组件，核对新底图锚点、页面和业务回归；命令成功不代表视觉或上线通过。五处按唯一配置的 key 关联；插画不是实景测绘。当前接入进度只见 TASKS。Vite 从 `/art/` 提供运行资源；正式地点二维码由下节独立命令处理，不受插画换源影响。
+`node scripts/prepare-a4-art.mjs` 继续维护原六图批次及五张当前地点详情图，不覆盖最终现场地图文件。最终地图按原 1334×1179 比例单独压缩为版本化 WebP，并由测试固定校验 PNG/WebP 的尺寸、字节和 SHA-256。五个透明热点仍按唯一活动配置的 key 与 `mapPosition` 关联；无位置的新地点只从折叠列表进入。当前接入进度只见 TASKS。Vite 从 `/art/` 提供运行资源；正式地点二维码由下节独立命令处理，不受插画换源影响。
 
 ### 轻量验证
 

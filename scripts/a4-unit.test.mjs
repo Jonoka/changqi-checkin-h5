@@ -7,7 +7,7 @@ import { mountGuide } from '../server/a1.js'
 import { createScanner } from '../web/src/wechat-scan.js'
 import { createHash } from 'node:crypto'
 import { loadActivityConfig, validateActivityConfig } from '../server/config.js'
-import { villageMapLayout, mapArtwork, mapRouteSegments } from '../web/src/map-layout.js'
+import { villageMapLayout, mapArtwork } from '../web/src/map-layout.js'
 import { reusableA4Evidence, a4CaptureRequested } from './check-a4-browser.mjs'
 
 test('UI: selected fresh screenshots never masquerade as a complete or reused set', () => {
@@ -105,7 +105,7 @@ test('A4: legacy crop files remain preserved at their original dimensions', asyn
 })
 
 // File integrity and key association are not a substitute for final customer page approval.
-test('A4: imported raster artwork is keyed correctly and has accurate runtime dimensions' , async () => {
+test('A4: imported landmark artwork and final map have accurate runtime dimensions' , async () => {
   const config = loadActivityConfig()
   const manifest = JSON.parse(await fs.readFile(new URL('../web/public/art/illustration-manifest.json', import.meta.url), 'utf8'))
   const hashes = new Set()
@@ -130,16 +130,20 @@ test('A4: imported raster artwork is keyed correctly and has accurate runtime di
     assert.equal(hash, file.sha256); hashes.add(hash)
   }
   assert.equal(hashes.size, 5)
-  const map = manifest.files.find(file => file.path === `web/public${mapArtwork.image}`)
-  assert.equal(map.width, mapArtwork.width); assert.equal(map.height, mapArtwork.height)
-  const mapComponent = await fs.readFile(new URL('../web/src/VillageMap.vue', import.meta.url), 'utf8')
-  assert.match(mapComponent, /map-route-overlay/)
-  assert.doesNotMatch(mapComponent, /PointArt|map-environment/)
-  const mapBytes = await fs.readFile(new URL(`../${map.path}`, import.meta.url))
+  assert.equal(mapArtwork.image, '/art/map-field-final-v1.webp')
+  const masterBytes = await fs.readFile(new URL('../assets/illustrations/restoration/masters/map-field-final-v1.png', import.meta.url))
+  const masterImage = await sharp(masterBytes).metadata()
+  assert.equal(masterImage.format, 'png'); assert.equal(masterImage.width, 1334); assert.equal(masterImage.height, 1179)
+  assert.equal(masterBytes.length, 3604079)
+  assert.equal(createHash('sha256').update(masterBytes).digest('hex'), 'abfa811468d14e4e830b2c8b985183ebd9222aac542956e6dbd33c96510fa159')
+  const mapBytes = await fs.readFile(new URL(`../web/public${mapArtwork.image}`, import.meta.url))
   const mapImage = await sharp(mapBytes).metadata()
-  assert.equal(mapImage.width, map.width); assert.equal(mapImage.height, map.height)
-  assert.equal(mapBytes.length, map.bytes)
-  assert.equal(createHash('sha256').update(mapBytes).digest('hex'), map.sha256)
+  assert.equal(mapImage.format, 'webp'); assert.equal(mapImage.width, mapArtwork.width); assert.equal(mapImage.height, mapArtwork.height)
+  assert.equal(mapImage.width / mapImage.height, masterImage.width / masterImage.height)
+  assert.equal(mapBytes.length, 560002)
+  assert.equal(createHash('sha256').update(mapBytes).digest('hex'), '123d476a065cc27597a563235d6bded6c4e9a03c700039bf0b3824b700257b9d')
+  const mapComponent = await fs.readFile(new URL('../web/src/VillageMap.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(mapComponent, /map-route-overlay|map-route-line|claim-map-marker|claim-map-gift|map-pin|PointArt|map-environment/)
   assert.ok(manifest.files.reduce((sum, file) => sum + file.bytes, 0) < 5000000)
   // PNG source hashes, native crop pixels, missing-master gate and output ownership are tested
   // in a4-image-art.test.mjs; the historical SVG fingerprint is no longer an art-generation input.
@@ -168,9 +172,7 @@ test('A4: local artwork, optional copy, focus and manual coordinates are validat
   assert.throws(() => validateActivityConfig(focus), /imagePosition/)
   const copy = structuredClone(base); copy.points[0].photoTip = 'x'.repeat(161)
   assert.throws(() => validateActivityConfig(copy), /photoTip/)
-  const badClaim = structuredClone(base); badClaim.claimMapPosition = { x: 96, y: 50 }
-  assert.throws(() => validateActivityConfig(badClaim), /claimMapPosition/)
-  const optional = structuredClone(base); optional.points[0].image = null; delete optional.points[0].mapPosition; optional.claimMapPosition = null
+  const optional = structuredClone(base); optional.points[0].image = null; delete optional.points[0].mapPosition
   assert.doesNotThrow(() => validateActivityConfig(optional))
 })
 
@@ -178,14 +180,14 @@ test('A4: reordering preserves artwork, copy and manual map positions by key', (
   const points = loadActivityConfig().points
   const normal = villageMapLayout(points)
   const reordered = villageMapLayout([...points].reverse())
-  assert.equal(normal.placement, 'field-reference')
+  assert.equal(normal.placement, 'final-map')
   for (const before of normal.nodes) {
     const after = reordered.nodes.find(node => node.point.key === before.point.key)
     assert.equal(after.point.image, before.point.image); assert.equal(after.point.photoTip, before.point.photoTip)
     assert.equal(after.x, before.x); assert.equal(after.y, before.y)
   }
-  assert.deepEqual(normal.routeSegments, mapRouteSegments, 'Field route is fixed reference geometry, never derived from point order')
-  assert.deepEqual(villageMapLayout(points, loadActivityConfig().claimMapPosition).claimPosition, loadActivityConfig().claimMapPosition)
+  assert.equal(Object.hasOwn(normal, 'routeSegments'), false)
+  assert.equal(Object.hasOwn(normal, 'claimPosition'), false)
   assert.equal(normal.width, reordered.width); assert.equal(normal.height, reordered.height)
 })
 
