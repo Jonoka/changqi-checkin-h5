@@ -5,7 +5,8 @@ import { loadActivityConfig } from '../server/config.js'
 
 const app = createApp({
   activityConfig: loadActivityConfig(),
-  pool: { query: async () => { throw new Error('test database failure') } }
+  pool: { query: async () => { throw new Error('test database failure') } },
+  wechatClient: { jsConfig: async (pageUrl) => ({ pageUrl, jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData'] }) }
 })
 const server = http.createServer(app)
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -21,6 +22,10 @@ try {
   const activity = await jsonResponse('/api/activity')
   assert.equal(activity.response.status, 200)
   assert.equal(activity.payload.ok, true)
+
+  const shareConfig = await jsonResponse(`/api/wechat/js-config?url=${encodeURIComponent(`${baseUrl}/r/0123456789abcdef0123456789abcdef`)}`)
+  assert.equal(shareConfig.response.status, 200)
+  assert.deepEqual(shareConfig.payload.data.jsApiList, ['updateAppMessageShareData', 'updateTimelineShareData'])
 
   const page = await fetch(`${baseUrl}/`)
   assert.equal(page.status, 200)

@@ -108,7 +108,7 @@ export function createWechatClient({ appId, appSecret, publicOrigin, fetchImpl =
       const timestamp = Math.floor(now() / 1000)
       const nonceStr = randomBytes(16).toString('hex')
       const signature = createHash('sha1').update(`jsapi_ticket=${jsapiTicket}&noncestr=${nonceStr}&timestamp=${timestamp}&url=${url}`).digest('hex')
-      return { appId, timestamp, nonceStr, signature, jsApiList: ['scanQRCode'] }
+      return { appId, timestamp, nonceStr, signature, jsApiList: ['scanQRCode', 'updateAppMessageShareData', 'updateTimelineShareData', 'onMenuShareAppMessage', 'onMenuShareTimeline'] }
     }
   }
 }

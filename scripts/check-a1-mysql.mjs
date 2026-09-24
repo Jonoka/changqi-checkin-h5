@@ -227,13 +227,16 @@ try {
 
   const { baseUrl, runtime } = await openApp()
   const anonymous = browser(baseUrl)
-  for (const route of ['/api/me', '/api/scan', '/api/wechat/js-config']) {
+  for (const route of ['/api/me', '/api/scan']) {
     const result = await anonymous.request(route, route === '/api/scan' ? { body: { result: `${baseUrl}/q/p01` } } : {})
     assert.equal(result.status, 401)
     assert.equal(result.payload.error.code, 'NEED_LOGIN')
   }
+  const anonymousSdk = await anonymous.request(`/api/wechat/js-config?url=${encodeURIComponent(`${runtime.publicOrigin}/r/0123456789abcdef0123456789abcdef`)}`)
+  assert.equal(anonymousSdk.status, 200)
+  assert.deepEqual(anonymousSdk.payload.data.jsApiList, ['scanQRCode', 'updateAppMessageShareData', 'updateTimelineShareData', 'onMenuShareAppMessage', 'onMenuShareTimeline'])
   assert.equal(await count('sessions'), 0)
-  ok('anonymous APIs return JSON 401/NEED_LOGIN without creating a session')
+  ok('identity APIs require login while public same-origin JS-SDK signing creates no visitor session')
 
   const a = browser(baseUrl), aAgain = browser(baseUrl), b = browser(baseUrl)
   const aMe = await oauth(a, 'user-a')
@@ -314,7 +317,7 @@ try {
 
   const configured = await a.request(`/api/wechat/js-config?url=${encodeURIComponent(`${runtime.publicOrigin}/?a=1#point/p01`)}`)
   assert.equal(configured.status, 200)
-  assert.deepEqual(configured.payload.data.jsApiList, ['scanQRCode'])
+  assert.deepEqual(configured.payload.data.jsApiList, ['scanQRCode', 'updateAppMessageShareData', 'updateTimelineShareData', 'onMenuShareAppMessage', 'onMenuShareTimeline'])
   assert.doesNotMatch(JSON.stringify(configured.payload), /secret|simulated-ticket|simulated-token/)
   const badUrl = await a.request('/api/wechat/js-config?url=https%3A%2F%2Fevil.test%2F')
   assert.equal(badUrl.status, 400)

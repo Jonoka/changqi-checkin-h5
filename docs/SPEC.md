@@ -1,6 +1,6 @@
 # SPEC · 长岐村漫游打卡
 
-**v1.6 · 2026-09-24 · 本人凭证照片现场核查与领奖前显式替换**
+**v1.7 · 2026-09-24 · 微信分享卡片固定公开入口**
 
 本文件承接 [PRD.md](PRD.md)，替代旧 TSD。它规定必须发生的行为和最低技术约定，不新增管理平台或防刷模块。示例不代表已经执行验收；本地、用户已确认的微信真机结果与本轮新增能力分别记录在 TASKS。
 
@@ -57,6 +57,12 @@ state/code/微信/会话保存失败停止自动跳转，显示识别错误与�
 服务器提供当前同域页面的 JS-SDK 配置；拟按不含 `#` 的页面 URL 签名，前端等待 `wx.ready` 才启用扫码。尽量使用稳定外层 URL 的路由方式，减少返回页面时的签名差异。
 
 `access_token`、`jsapi_ticket` 按微信返回的有效期复用；不每次扫码重新申请。不未经授权修改现有公众号消息服务；若已有第三方托管，先核对凭据管理方式。正式实现前按官方文档和实际账号验证，不能认为有 AppID 就一定可用。
+
+### 微信分享卡片
+
+JS-SDK ready 后统一调用 `wx.updateAppMessageShareData` 和 `wx.updateTimelineShareData`；现有 SDK 提供旧分享 API 时只作兼容回退，不另建分享系统。标题固定为“长岐村漫游打卡”，描述固定为“微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。”，图片固定为 `https://cq.fsxinhuo.cn/share/share-card-v1.jpg`，链接固定为 `https://cq.fsxinhuo.cn/`。
+
+首页、地点 hash、游客 `/#claim` 和匿名 `/r/:claimCode` 均不得把当前 URL 当成分享目标；OAuth `code/state`、`scannedPointKey`、领取码和统计页路径不得进入分享数据。匿名派发页可取得经同域 URL 校验的 JS-SDK 签名，但不因此取得登录身份、照片或领取权限。非微信环境不加载分享 SDK、不报错。SPA HTML 同步提供 title、description、`og:title`、`og:description`、`og:image`、`og:type=website` 和固定 `og:url` 作为兜底。
 
 ### 游客领取二维码
 

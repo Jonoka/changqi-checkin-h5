@@ -6,7 +6,7 @@ import { runtimeConfig } from '../server/runtime.js'
 import { applicationUrl, createWechatClient, parsePointQr, safeReturnTo } from '../server/wechat.js'
 import { saveSession } from '../server/session.js'
 import { currentPointKey, setCurrentPoint } from '../server/identity.js'
-import { createScanner } from '../web/src/wechat-scan.js'
+import { createScanner, initializeWechatShare, WECHAT_SHARE_DATA } from '../web/src/wechat-scan.js'
 
 const origin = 'https://activity.example.test'
 const points = [{ key: 'p01', name: '葫芦娃' }, { key: 'p02', name: '卢氏大宗祠' }]
@@ -147,6 +147,33 @@ test('SDK/config authentication failure cannot clear a previously identified nat
   scanner.dispose()
 })
 
+test('share-only SDK setup is silent outside WeChat and always publishes the fixed public card inside WeChat', async () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  let loaded = false
+  try {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: 'Chrome test' } })
+    assert.equal(await initializeWechatShare({ loadSdk: async () => { loaded = true }, getConfig: async () => ({}) }), false)
+    assert.equal(loaded, false)
+
+    const calls = {}
+    const sdk = {
+      error(callback) { calls.error = callback },
+      config(value) { calls.config = value },
+      ready(callback) { callback() },
+      updateAppMessageShareData(value) { calls.appShare = value },
+      updateTimelineShareData(value) { calls.timelineShare = value }
+    }
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: 'MicroMessenger simulated' } })
+    assert.equal(await initializeWechatShare({ loadSdk: async () => sdk, getConfig: async () => ({ appId: 'simulated', jsApiList: ['updateAppMessageShareData'] }) }), true)
+    assert.deepEqual(calls.appShare, WECHAT_SHARE_DATA)
+    assert.deepEqual(calls.timelineShare, { title: WECHAT_SHARE_DATA.title, link: WECHAT_SHARE_DATA.link, imgUrl: WECHAT_SHARE_DATA.imgUrl })
+    assert.equal(calls.config.debug, false)
+  } finally {
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator)
+    else delete globalThis.navigator
+  }
+})
+
 function scannerHarness(options = {}) {
   const state = { phase: 'idle', message: '' }
   const callbacks = {}
@@ -155,6 +182,8 @@ function scannerHarness(options = {}) {
     config: (value) => { callbacks.config = value },
     ready: (done) => { callbacks.ready = done },
     error: (done) => { callbacks.error = done },
+    updateAppMessageShareData: (value) => { callbacks.appShare = value },
+    updateTimelineShareData: (value) => { callbacks.timelineShare = value },
     scanQRCode: (value) => { callbacks.scan = value }
   }
   const scanner = createScanner({ state, loadSdk: async () => sdk, getConfig: async () => ({ appId: 'simulated', jsApiList: ['scanQRCode'] }),
@@ -178,6 +207,10 @@ test('simulated SDK: only wx.ready enables scanning; cancellation, denied permis
   assert.equal(await h.scanner.scan(), false)
   h.callbacks.ready()
   await initializing
+  assert.deepEqual(h.callbacks.appShare, WECHAT_SHARE_DATA)
+  assert.deepEqual(h.callbacks.timelineShare, { title: WECHAT_SHARE_DATA.title, link: WECHAT_SHARE_DATA.link, imgUrl: WECHAT_SHARE_DATA.imgUrl })
+  assert.equal(new URL(h.callbacks.appShare.link).href, 'https://cq.fsxinhuo.cn/')
+  assert.doesNotMatch(h.callbacks.appShare.link, /claimCode|code=|state=|scannedPointKey|\/r\//i)
   for (const outcome of ['cancel', 'fail']) {
     const result = h.scanner.scan()
     assert.equal(h.callbacks.scan.needResult, 1)

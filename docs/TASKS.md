@@ -1,10 +1,18 @@
 # TASKS · Coding Agent 执行清单
 
-**v1.7 · 2026-09-24 · 网页端 / 本地 Agent 可接续，单次顺序执行**
+**v1.8 · 2026-09-24 · 网页端 / 本地 Agent 可接续，单次顺序执行**
 
 输入：[PRD.md](PRD.md)、[SPEC.md](SPEC.md)、[AGENTS.md](../AGENTS.md)、[视觉参考](../assets/reference/README.md)。发布方式见 [DEPLOY.md](DEPLOY.md)。本文件既是任务清单，也是唯一进度/接续记录，不再维护人工排期或另一份状态文档。
 
 ## 0. 当前真实状态
+
+**当前轮：微信分享卡片固定公开入口（2026-09-24，本地实现、检查和构建通过；未构建镜像、未部署、待微信真机确认）。** 开工 Windows 工作区干净，分支 `feat/a1-wechat-scan`、HEAD/远端 PR #1 head 均为 `f522719f9b8d5e141fbbf995cf7c675d64e0ae52`；main 为 `cc411965dd384e9608a80abf87a9e883eea8294d`，PR #1 保持 Draft/Open、merge state CLEAN。没有 reset、clean、合并、转 Ready 或生产操作。
+
+微信 SDK ready 后统一配置聊天/群聊和朋友圈：标题“长岐村漫游打卡”，描述“微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。”，图片 `https://cq.fsxinhuo.cn/share/share-card-v1.jpg`，链接固定 `https://cq.fsxinhuo.cn/`。首页、地点 hash、游客 `/#claim` 继续复用原 SDK 初始化；匿名 `/r/:claimCode` 只新增同域签名和固定公开分享数据，不取得身份、照片或领取权限。分享内容不读取当前 URL，因此不携带 claimCode、OAuth code/state、scannedPointKey 或统计路径；非微信环境直接跳过分享 SDK。
+
+用户提供的 JPEG 原字节保存在 `assets/share/share-poster-original-v1.jpg`：1500×995、313,405 B。运行图 `web/public/share/share-card-v1.jpg`：800×800、61,605 B；使用现有 `sharp` 等比缩放并以原图近似米白背景补成方图，完整保留“八茗长岐”、2026 活动信息、兔子和灯笼，不重新生成或改写海报。版本化文件名用于规避微信旧图缓存；Vite 构建产物已包含同路径图片。
+
+`npm run check` 配置/HTTP及 **70/70 Node 测试通过**；覆盖 SDK ready 后两类新分享 API、固定公开链接、私有字段不进入 link、非微信无副作用，以及匿名同域 JS-SDK 签名不创建游客身份。`npm run build` 通过；产物 HTML 含 title/description/OG 兜底，产物图片 61,605 B；`git diff --check` 通过。本轮没有业务、数据库或布局改动，未重复运行隔离 MySQL/Chrome 全套；未做微信真实分享卡片、缩略图缓存和点击落地验证，需在本次版本部署后由微信真机确认。
 
 **当前轮：同步最新源码并替换最终现场地图 v2（2026-09-24，本地完整回归、构建和生产部署通过，微信真机待验）。** 开工 Windows 工作区干净且已与 PR #1 远端 head `a89919969799738a7871a15c5426642f65bf1d57` 一致，无需 fast-forward；main 仍为 `cc411965dd384e9608a80abf87a9e883eea8294d`，PR 保持 Draft/Open。沿用 v1 的完整成图 + 五个透明热点方案，不恢复网页路线/兑奖处/编号叠加，不改地点、二维码、OAuth、扫码、照片核查/替换或领取逻辑。
 
@@ -278,7 +286,7 @@ A0–A6 下的既往实现/测试记录保留其发生时的边界；当前部�
 
 每个执行任务结束时更新顶部状态、任务表、验收表和下面的当前摘要。避免重复长篇历史；需要的命令输出可放不含敏感数据的测试报告，并在此引用。
 
-**当前接续（2026-09-24）：**已在远端最新 `a89919969799738a7871a15c5426642f65bf1d57` 基础上接入最终地图 v2；69项 Node、56项隔离 MySQL/实际 Chrome 完整回归、构建与三宽目视通过，证据见第0节。下一步沿原分支提交推送后，只构建该实际源 SHA；本次发布同时带上此前尚未发布的凭证照片核查/显式替换及 `photo_revision` 幂等迁移。发布前须按 DEPLOY 备份生产数据库与持久照片，迁移成功才替换 app；PR 继续 Draft/Open，不转 Ready 或合并。既有微信 iOS/Android 授权、扫码、首次照片上传、领取及纸样由用户确认通过；新增地图 v2 与照片替换能力仍需独立真机验收。
+**当前接续（2026-09-24）：**已在远端最新 `f522719f9b8d5e141fbbf995cf7c675d64e0ae52` 基础上完成微信分享卡片改造；70项 Node、构建和 diff 检查通过，素材尺寸/字节及构建产物已回读，证据见第0节。下一步沿原分支提交推送；不触发 Actions 或生产部署，PR 继续 Draft/Open。部署本次实际源码后，用微信从首页、地点页、`/#claim` 和匿名 `/r/:claimCode` 分别分享到聊天，确认标题/缩略图、缓存刷新和点击统一落到公开首页；不把本地模拟当成真机结果。
 
 <details>
 <summary>A5/A6 与首次部署历史（保留原记录，不是本轮 UI 状态）</summary>

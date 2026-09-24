@@ -111,7 +111,7 @@ export function mountIdentityAndScan(app, { pool, runtime, wechatClient, session
     } })
   })
 
-  app.get('/api/wechat/js-config', requireUser, async (request, response) => {
+  app.get('/api/wechat/js-config', async (request, response) => {
     if (!wechatClient) unavailable()
     const config = await wechatClient.jsConfig(request.query.url)
     response.json({ ok: true, data: config })

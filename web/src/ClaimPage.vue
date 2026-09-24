@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { api, post } from './api.js'
 import ClaimAction from './ClaimAction.vue'
+import { initializeWechatShare } from './wechat-scan.js'
 
 const code = /^\/r\/([a-f0-9]{32})\/?$/.exec(window.location.pathname)?.[1]
 const state = ref(null)
@@ -28,7 +29,12 @@ async function refresh() {
   finally { loading.value = false }
 }
 function restore() { if (document.visibilityState !== 'hidden') void refresh() }
-onMounted(() => { void refresh(); window.addEventListener('pageshow', restore); document.addEventListener('visibilitychange', restore) })
+onMounted(() => {
+  void refresh()
+  void initializeWechatShare({ getConfig: () => api(`/api/wechat/js-config?url=${encodeURIComponent(window.location.href.split('#')[0])}`) }).catch(() => {})
+  window.addEventListener('pageshow', restore)
+  document.addEventListener('visibilitychange', restore)
+})
 onUnmounted(() => { alive = false; window.removeEventListener('pageshow', restore); document.removeEventListener('visibilitychange', restore) })
 </script>
 
