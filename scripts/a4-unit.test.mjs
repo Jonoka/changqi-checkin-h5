@@ -7,7 +7,7 @@ import { mountGuide } from '../server/a1.js'
 import { createScanner } from '../web/src/wechat-scan.js'
 import { createHash } from 'node:crypto'
 import { loadActivityConfig, validateActivityConfig } from '../server/config.js'
-import { villageMapLayout, mapArtwork } from '../web/src/map-layout.js'
+import { villageMapLayout, mapArtwork, mapRouteSegments } from '../web/src/map-layout.js'
 import { reusableA4Evidence, a4CaptureRequested } from './check-a4-browser.mjs'
 
 test('UI: selected fresh screenshots never masquerade as a complete or reused set', () => {
@@ -133,7 +133,8 @@ test('A4: imported raster artwork is keyed correctly and has accurate runtime di
   const map = manifest.files.find(file => file.path === `web/public${mapArtwork.image}`)
   assert.equal(map.width, mapArtwork.width); assert.equal(map.height, mapArtwork.height)
   const mapComponent = await fs.readFile(new URL('../web/src/VillageMap.vue', import.meta.url), 'utf8')
-  assert.doesNotMatch(mapComponent, /<svg|PointArt|map-environment/)
+  assert.match(mapComponent, /map-route-overlay/)
+  assert.doesNotMatch(mapComponent, /PointArt|map-environment/)
   const mapBytes = await fs.readFile(new URL(`../${map.path}`, import.meta.url))
   const mapImage = await sharp(mapBytes).metadata()
   assert.equal(mapImage.width, map.width); assert.equal(mapImage.height, map.height)
@@ -155,7 +156,7 @@ test('A4: local artwork, optional copy, focus and manual coordinates are validat
     const qr = structuredClone(base); qr.wechat.officialAccountQr = invalid
     assert.throws(() => validateActivityConfig(qr), /officialAccountQr/)
   }
-  for (const value of [{ x: 14, y: 50 }, { x: 50, y: 89 }, { x: '50', y: 50 }, { x: NaN, y: 50 }]) {
+  for (const value of [{ x: 4.9, y: 50 }, { x: 50, y: 95.1 }, { x: '50', y: 50 }, { x: NaN, y: 50 }]) {
     const config = structuredClone(base); config.points[0].mapPosition = value
     assert.throws(() => validateActivityConfig(config), /mapPosition/)
   }
@@ -167,7 +168,9 @@ test('A4: local artwork, optional copy, focus and manual coordinates are validat
   assert.throws(() => validateActivityConfig(focus), /imagePosition/)
   const copy = structuredClone(base); copy.points[0].photoTip = 'x'.repeat(161)
   assert.throws(() => validateActivityConfig(copy), /photoTip/)
-  const optional = structuredClone(base); optional.points[0].image = null; delete optional.points[0].mapPosition
+  const badClaim = structuredClone(base); badClaim.claimMapPosition = { x: 96, y: 50 }
+  assert.throws(() => validateActivityConfig(badClaim), /claimMapPosition/)
+  const optional = structuredClone(base); optional.points[0].image = null; delete optional.points[0].mapPosition; optional.claimMapPosition = null
   assert.doesNotThrow(() => validateActivityConfig(optional))
 })
 
@@ -181,7 +184,8 @@ test('A4: reordering preserves artwork, copy and manual map positions by key', (
     assert.equal(after.point.image, before.point.image); assert.equal(after.point.photoTip, before.point.photoTip)
     assert.equal(after.x, before.x); assert.equal(after.y, before.y)
   }
-  assert.equal(Object.hasOwn(normal, 'route'), false, 'Physical paths are in the supplied raster, never redrawn from point order')
+  assert.deepEqual(normal.routeSegments, mapRouteSegments, 'Field route is fixed reference geometry, never derived from point order')
+  assert.deepEqual(villageMapLayout(points, loadActivityConfig().claimMapPosition).claimPosition, loadActivityConfig().claimMapPosition)
   assert.equal(normal.width, reordered.width); assert.equal(normal.height, reordered.height)
 })
 

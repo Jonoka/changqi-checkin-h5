@@ -146,14 +146,16 @@ export function createA4Capture({ call, evaluate, directory }) {
         }
       }
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('img[src^="/art/"], img.claim-qr, img.saved-photo')].filter(image => image.checkVisibility() && (!image.complete || image.naturalWidth === 0)).map(image => image.className)`), [], `${name}: required artwork/QR/saved images loaded`)
-      assert.deepEqual(await evaluate(`[...document.querySelectorAll('button')].filter(button => button.getClientRects().length && button.getBoundingClientRect().height < 43).map(button => button.textContent.trim())`), [], `${name}: visible buttons have touch-sized targets`)
+      assert.deepEqual(await evaluate(`[...document.querySelectorAll('button:not(.map-point)')].filter(button => button.getClientRects().length && button.getBoundingClientRect().height < 43).map(button => button.textContent.trim())`), [], `${name}: primary/list buttons have touch-sized targets; compact map pins have the folded-list fallback`)
 
       const alignment = await evaluate(`(() => {
         const canvas=document.querySelector('.map-canvas'); if(!canvas) return [];
         const image=canvas.querySelector('.map-scenery'), bad=[];
         if(!image || !image.naturalWidth) return ['missing-map-image'];
         const s=image.getBoundingClientRect(), c=canvas.getBoundingClientRect();
-        if(canvas.querySelector('svg, .point-art')) bad.push('duplicate-vector-or-landmark');
+        if(canvas.querySelector('.point-art')) bad.push('duplicate-landmark');
+        if(!canvas.querySelector('.map-route-overlay')) bad.push('missing-field-route');
+        if(!canvas.querySelector('.claim-map-marker')) bad.push('missing-claim-marker');
         if(Math.abs(s.width/s.height-image.naturalWidth/image.naturalHeight)>.002) bad.push('image-stretched');
         if(Math.abs(c.width-s.width)>1 || Math.abs(c.height-s.height)>1 || Math.abs(c.left-s.left)>1 || Math.abs(c.top-s.top)>1) bad.push('image-container-mismatch');
         const buttons=[...canvas.querySelectorAll('.map-point')];

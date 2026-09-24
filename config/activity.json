@@ -6,6 +6,7 @@
     "maxPhotoBytes": 15728640
   },
   "claimLocationText": "请前往现场礼品领取处，具体位置以现场指引为准",
+  "claimMapPosition": { "x": 41.11, "y": 57.69 },
   "wechat": {
     "officialAccountName": "印象芦苞",
     "officialAccountQr": null,
@@ -16,31 +17,31 @@
       "key": "p01", "name": "葫芦娃", "displayOrder": 1,
       "image": "/art/point-p01-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "葫芦与藤叶主题概念插画，非现场实景", "imagePosition": "50% 50%",
       "photoTip": "将葫芦主题地标拍入画面，留一些周边环境。",
-      "mapPosition": { "x": 22, "y": 12 }
+      "mapPosition": { "x": 10.94, "y": 43.22 }
     },
     {
       "key": "p02", "name": "卢氏大宗祠", "displayOrder": 2,
       "image": "/art/point-p02-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "灰砖瓦与镬耳式建筑语言的岭南祠堂概念插画，非建筑实录", "imagePosition": "50% 50%",
       "photoTip": "选择能看清祠堂建筑主体的角度，尽量避开遮挡。",
-      "mapPosition": { "x": 75, "y": 16 }
+      "mapPosition": { "x": 64.45, "y": 68.84 }
     },
     {
       "key": "p03", "name": "沉香古井", "displayOrder": 3,
       "image": "/art/point-p03-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "以井口和石井沿为主体的古井概念插画，非现场实景", "imagePosition": "50% 50%",
       "photoTip": "让井口和井沿清晰入镜，拍照时注意脚下安全。",
-      "mapPosition": { "x": 31, "y": 65 }
+      "mapPosition": { "x": 66.60, "y": 90.83 }
     },
     {
       "key": "p04", "name": "苞榕", "displayOrder": 4,
       "image": "/art/point-p04-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "树冠、树干与垂落气根的榕树概念插画，非现场实景", "imagePosition": "50% 50%",
       "photoTip": "试着把树冠、树干或气根拍入画面，记录榕树的姿态。",
-      "mapPosition": { "x": 75, "y": 87 }
+      "mapPosition": { "x": 74.71, "y": 62.40 }
     },
     {
       "key": "p05", "name": "文笔山顶", "displayOrder": 5,
       "image": "/art/point-p05-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "山顶眺望村落与层叠山林的概念插画，非地理测绘", "imagePosition": "50% 50%",
       "photoTip": "在安全停留处拍下村落与山林，不为取景冒险。",
-      "mapPosition": { "x": 25, "y": 88 }
+      "mapPosition": { "x": 76.81, "y": 35.87 }
     }
   ]
 }
