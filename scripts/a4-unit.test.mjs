@@ -178,7 +178,7 @@ test('A4: reordering preserves artwork, copy and manual map positions by key', (
   const points = loadActivityConfig().points
   const normal = villageMapLayout(points)
   const reordered = villageMapLayout([...points].reverse())
-  assert.equal(normal.placement, 'configured')
+  assert.equal(normal.placement, 'field-reference')
   for (const before of normal.nodes) {
     const after = reordered.nodes.find(node => node.point.key === before.point.key)
     assert.equal(after.point.image, before.point.image); assert.equal(after.point.photoTip, before.point.photoTip)
