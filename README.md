@@ -75,9 +75,9 @@ npm start
 
 首页/示意地图、照片上传与成功、领取/派发沿用同一 Vue 页面和已有接口；地图节点只查看，不提供扫码资格。引导、授权错误与人数页使用服务端同风格模板，构建前仍可返回文字和错误状态。页面不依赖外部字体服务。
 
-五张地点详情插画继续使用 [RASTER_HANDOFF](assets/illustrations/restoration/RASTER_HANDOFF.md) 对应的独立 PNG 母版和 WebP；原字节、来源、生成记录及确认边界仍由 `masters-import-manifest.json` 记录。页面地图改用用户最终确认的完整成图：PNG 母版为 `assets/illustrations/restoration/masters/map-field-final-v1.png`，运行资源为 `/art/map-field-final-v1.webp`。图内已经包含五个编号和地点名、粉色路线及兑奖处，页面只叠加五个透明查看热点，不再绘制可见路线、点位或兑奖处。旧地图母版、旧运行图、历史裁图清单和 `village-art.mjs` 均保留用于追溯与回退，不进入当前页面。
+五张地点详情插画继续使用 [RASTER_HANDOFF](assets/illustrations/restoration/RASTER_HANDOFF.md) 对应的独立 PNG 母版和 WebP；原字节、来源、生成记录及确认边界仍由 `masters-import-manifest.json` 记录。页面地图改用用户最终确认的完整成图：PNG 母版为 `assets/illustrations/restoration/masters/map-field-final-v2.png`，运行资源为 `/art/map-field-final-v2.webp`。图内已经包含五个编号和地点名、粉色路线及兑奖处，页面只叠加五个透明查看热点，不再绘制可见路线、点位或兑奖处。旧地图母版、旧运行图、历史裁图清单和 `village-art.mjs` 均保留用于追溯与回退，不进入当前页面。
 
-`node scripts/prepare-a4-art.mjs` 继续维护原六图批次及五张当前地点详情图，不覆盖最终现场地图文件。最终地图按原 1334×1179 比例单独压缩为版本化 WebP，并由测试固定校验 PNG/WebP 的尺寸、字节和 SHA-256。五个透明热点仍按唯一活动配置的 key 与 `mapPosition` 关联；无位置的新地点只从折叠列表进入。当前接入进度只见 TASKS。Vite 从 `/art/` 提供运行资源；正式地点二维码由下节独立命令处理，不受插画换源影响。
+`node scripts/prepare-a4-art.mjs` 继续维护原六图批次及五张当前地点详情图，不覆盖最终现场地图文件。最终地图按原 1377×1142 比例单独压缩为版本化 WebP，并由测试固定校验 PNG/WebP 的尺寸、字节和 SHA-256。五个透明热点仍按唯一活动配置的 key 与 `mapPosition` 关联；无位置的新地点只从折叠列表进入。当前接入进度只见 TASKS。Vite 从 `/art/` 提供运行资源；正式地点二维码由下节独立命令处理，不受插画换源影响。
 
 ### 轻量验证
 

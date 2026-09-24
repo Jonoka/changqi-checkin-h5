@@ -16,31 +16,31 @@
       "key": "p01", "name": "葫芦娃", "displayOrder": 1,
       "image": "/art/point-p01-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "葫芦与藤叶主题概念插画，非现场实景", "imagePosition": "50% 50%",
       "photoTip": "将葫芦主题地标拍入画面，留一些周边环境。",
-      "mapPosition": { "x": 5.10, "y": 34.86 }
+      "mapPosition": { "x": 5.00, "y": 36.65 }
     },
     {
       "key": "p02", "name": "卢氏大宗祠", "displayOrder": 2,
       "image": "/art/point-p02-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "灰砖瓦与镬耳式建筑语言的岭南祠堂概念插画，非建筑实录", "imagePosition": "50% 50%",
       "photoTip": "选择能看清祠堂建筑主体的角度，尽量避开遮挡。",
-      "mapPosition": { "x": 57.50, "y": 56.74 }
+      "mapPosition": { "x": 56.39, "y": 59.59 }
     },
     {
       "key": "p03", "name": "沉香古井", "displayOrder": 3,
       "image": "/art/point-p03-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "以井口和石井沿为主体的古井概念插画，非现场实景", "imagePosition": "50% 50%",
       "photoTip": "让井口和井沿清晰入镜，拍照时注意脚下安全。",
-      "mapPosition": { "x": 62.22, "y": 81.09 }
+      "mapPosition": { "x": 61.04, "y": 84.89 }
     },
     {
       "key": "p04", "name": "苞榕", "displayOrder": 4,
       "image": "/art/point-p04-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "树冠、树干与垂落气根的榕树概念插画，非现场实景", "imagePosition": "50% 50%",
       "photoTip": "试着把树冠、树干或气根拍入画面，记录榕树的姿态。",
-      "mapPosition": { "x": 76.39, "y": 54.54 }
+      "mapPosition": { "x": 75.20, "y": 57.05 }
     },
     {
       "key": "p05", "name": "文笔山顶", "displayOrder": 5,
       "image": "/art/point-p05-restored-v1.webp", "imageWidth": 960, "imageHeight": 640, "imageAlt": "山顶眺望村落与层叠山林的概念插画，非地理测绘", "imagePosition": "50% 50%",
       "photoTip": "在安全停留处拍下村落与山林，不为取景冒险。",
-      "mapPosition": { "x": 87.56, "y": 15.44 }
+      "mapPosition": { "x": 82.68, "y": 20.62 }
     }
   ]
 }

@@ -36,8 +36,8 @@ const versionFiles = [
   'web/src/ClaimPage.vue',
   'web/src/ClaimAction.vue',
   'web/public/art/illustration-manifest.json',
-  'assets/illustrations/restoration/masters/map-field-final-v1.png',
-  'web/public/art/map-field-final-v1.webp',
+  'assets/illustrations/restoration/masters/map-field-final-v2.png',
+  'web/public/art/map-field-final-v2.webp',
   'web/public/art/point-p01-restored-v1.webp',
   'web/public/art/point-p02-restored-v1.webp',
   'web/public/art/point-p03-restored-v1.webp',
@@ -67,7 +67,7 @@ function escapeHtml(value) {
 function gallery(records, version) {
   const currentMap = records.find((record) => record.state === 'home' && record.width === 390)?.mapFile
   const cards = records.map((record) => `<figure><a href="${escapeHtml(record.file)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(record.file)}" alt="${escapeHtml(record.state)} ${record.width}px" loading="lazy"></a><figcaption><strong>${escapeHtml(record.state)}</strong> · ${record.width}px<br><small>${escapeHtml(record.capturedAt)}</small></figcaption></figure>`).join('')
-  const comparison = currentMap ? `<h2>最终现场地图 / 实际页面</h2><div class="comparison"><figure><a href="../../assets/illustrations/restoration/masters/map-field-final-v1.png"><img src="../../assets/illustrations/restoration/masters/map-field-final-v1.png" alt="用户最终确认的完整现场地图"></a><figcaption>最终 PNG 母版 · 页面不再叠加路线、点位或兑奖处</figcaption></figure><figure><a href="${escapeHtml(currentMap)}" target="_blank"><img src="${escapeHtml(currentMap)}" alt="本轮实际首页地图"></a><figcaption>本轮 390px 实际渲染地图</figcaption></figure></div>` : ''
+  const comparison = currentMap ? `<h2>最终现场地图 / 实际页面</h2><div class="comparison"><figure><a href="../../assets/illustrations/restoration/masters/map-field-final-v2.png"><img src="../../assets/illustrations/restoration/masters/map-field-final-v2.png" alt="用户最终确认的完整现场地图"></a><figcaption>最终 PNG 母版 · 页面不再叠加路线、点位或兑奖处</figcaption></figure><figure><a href="${escapeHtml(currentMap)}" target="_blank"><img src="${escapeHtml(currentMap)}" alt="本轮实际首页地图"></a><figcaption>本轮 390px 实际渲染地图</figcaption></figure></div>` : ''
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A4 本地视觉复核</title><style>
 body{margin:0;padding:24px;background:#f2f1e8;color:#254533;font:15px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1280px;margin:auto}h1,h2{line-height:1.3}code{overflow-wrap:anywhere}.meta{padding:14px 18px;background:#fff;border:1px solid #d6ddce;border-radius:12px}.comparison,.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;align-items:start}.comparison{max-width:920px}.grid figure,.comparison figure{margin:0;padding:10px;background:#fff;border:1px solid #d6ddce;border-radius:12px}.grid img,.comparison img{display:block;width:100%;height:auto}figcaption{padding:9px 3px 2px}small{color:#667568}@media(max-width:600px){body{padding:12px}}
 </style></head><body><main><h1>长岐村 A4 本地视觉复核</h1><p>截图来自隔离 MySQL + 本机 Chrome。微信 SDK、微信网络及故障注入为模拟，不是真机验收。</p><div class="meta">分支：<code>${escapeHtml(version.branch)}</code><br>截图基准 HEAD：<code>${escapeHtml(version.head)}</code><br>运行时源码/素材指纹：<code>${escapeHtml(version.runtimeSha256)}</code><br><a href="a4-screenshots.json">查看截图元数据</a></div>${comparison}<h2>实际页面状态</h2><div class="grid">${cards}</div></main></body></html>`
@@ -162,7 +162,7 @@ export function createA4Capture({ call, evaluate, directory }) {
         const image=canvas.querySelector('.map-scenery'), bad=[];
         if(!image || !image.naturalWidth) return ['missing-map-image'];
         const s=image.getBoundingClientRect(), c=canvas.getBoundingClientRect();
-        if(image.getAttribute('src')!=='/art/map-field-final-v1.webp') bad.push('wrong-map-image');
+        if(image.getAttribute('src')!=='/art/map-field-final-v2.webp') bad.push('wrong-map-image');
         if(canvas.querySelector('.point-art')) bad.push('duplicate-landmark');
         if(canvas.querySelector('.map-route-overlay,.map-route-underlay,.map-route-line,.claim-map-marker,.claim-map-gift,.map-pin')) bad.push('duplicate-map-visual');
         if(Math.abs(s.width/s.height-image.naturalWidth/image.naturalHeight)>.002) bad.push('image-stretched');

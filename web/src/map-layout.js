@@ -1,4 +1,4 @@
-export const mapArtwork = Object.freeze({ image: '/art/map-field-final-v1.webp', width: 1334, height: 1179 })
+export const mapArtwork = Object.freeze({ image: '/art/map-field-final-v2.webp', width: 1377, height: 1142 })
 
 function validPosition(value) {
   const { x, y } = value || {}
