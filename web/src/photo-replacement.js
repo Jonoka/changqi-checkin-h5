@@ -30,20 +30,31 @@ export function replacementOutcome(inventory, operation) {
   if (inventory.claimedAt || !inventory.enabled) return { kind: 'failed', inventory, message: '照片版本未变，已领取或活动已关闭，不能继续修改。' }
   return { kind: 'pending', inventory }
 }
+export function needsPhotoLogin(error) { return ['NEED_LOGIN', 'PHOTO_OWNER_CHANGED'].includes(error?.code) }
 const definiteFailures = new Set(['REPLACEMENT_FAILED', 'UNSUPPORTED_IMAGE', 'IMAGE_TOO_LARGE', 'INVALID_UPLOAD', 'INVALID_REPLACEMENT', 'PHOTO_REQUIRED', 'INVALID_ORIGIN'])
 export async function replaceWithRecovery({ operation, upload, readInventory, priorUnknown = false }) {
   let cause
   try {
     const result = replacementOutcome(await upload(), operation)
     if (result.kind !== 'pending') return result
-  } catch (error) { cause = error }
+  } catch (error) {
+    // A different/expired session cannot reconcile this owner's operation. Preserve the typed cause.
+    if (needsPhotoLogin(error)) throw error
+    cause = error
+  }
   let inventory
   try { inventory = await readInventory() }
-  catch { return { kind: 'unknown', message: '仍无法确认替换结果，请继续核对，不要新建修改或领取。' } }
+  catch (error) {
+    if (needsPhotoLogin(error)) throw error
+    return { kind: 'unknown', code: error.code, message: '仍无法确认替换结果，请继续核对，不要新建修改或领取。' }
+  }
   try {
     const result = replacementOutcome(inventory, operation)
     // An old record alone never confirms a replacement. A prior unresolved attempt may still run.
     if (result.kind === 'pending' && !priorUnknown && definiteFailures.has(cause?.code)) return { kind: 'failed', inventory, message: cause.message }
     return result
-  } catch (error) { return { kind: 'unknown', message: error.message } }
+  } catch (error) {
+    if (needsPhotoLogin(error)) throw error
+    return { kind: 'unknown', code: error.code, message: error.message }
+  }
 }

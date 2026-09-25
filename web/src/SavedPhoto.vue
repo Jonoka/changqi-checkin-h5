@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from './api.js'
-import { readPending, savePending, clearPending, fileDigest, replacementOutcome, replaceWithRecovery } from './photo-replacement.js'
+import { readPending, savePending, clearPending, fileDigest, replacementOutcome, replaceWithRecovery, needsPhotoLogin } from './photo-replacement.js'
 
 const props = defineProps({ point: Object, me: Object, enabled: Boolean, maxBytes: Number, disabled: Boolean })
 const emit = defineEmits(['busy', 'locked', 'editing', 'photo-state', 'login-required'])
@@ -25,6 +25,17 @@ function clearSelection() {
   if (preview.value) URL.revokeObjectURL(preview.value)
   preview.value = ''; file.value = null
   if (input.value) input.value.value = ''
+}
+function requestLogin(error) {
+  if (!needsPhotoLogin(error)) return false
+  if (alive) {
+    // Retire this reader immediately, including sibling/in-flight work before Vue unmounts it.
+    // Never clear a possibly submitted operation: OAuth/reload restores it only for its owner.
+    alive = false; inventoryAttempt++; photoAttempt++; controller?.abort()
+    clearPhoto(); clearSelection(); photoLoading.value = false; phase.value = 'auth-required'
+    emit('login-required', { code: error.code, message: error.message, photoReplacement: true, pending: Boolean(pending.value) })
+  }
+  return true
 }
 function choose(event) {
   if (busy.value) return
@@ -75,7 +86,7 @@ async function loadPhoto(revision, force = false) {
     photoUrl.value = url; url = null; photoRevision.value = revision
     return true
   } catch (error) {
-    if (alive && attempt === photoAttempt) photoMessage.value = error.message || '照片读取失败，请重试'
+    if (alive && attempt === photoAttempt && !requestLogin(error)) photoMessage.value = error.message || '照片读取失败，请重试'
     return false
   } finally {
     clearTimeout(timeout)
@@ -95,7 +106,7 @@ async function refresh() {
   const attempt = inventoryAttempt + 1
   photoMessage.value = ''; photoLoading.value = true
   try { await showCurrent(await readCurrent(), true) }
-  catch (error) { if (alive && attempt === inventoryAttempt) photoMessage.value = error.message }
+  catch (error) { if (alive && attempt === inventoryAttempt && !requestLogin(error)) photoMessage.value = error.message }
   finally { if (alive && attempt === inventoryAttempt) photoLoading.value = false }
 }
 function begin() {
@@ -135,6 +146,7 @@ async function submit() {
   phase.value = 'uploading'; message.value = '正在保存替换照片，请勿离开或重复提交…'
   try {
     const hash = await fileDigest(file.value)
+    if (!alive) return // Another photo reader may have required login while hashing this selection.
     if (pending.value && pending.value.fileHash !== hash) {
       phase.value = 'unknown'; message.value = '这不是本次修改的原文件。请重新选择同一文件，或继续核对结果。'; return
     }
@@ -160,14 +172,14 @@ async function submit() {
     })
     await applyOutcome(result)
   } catch (error) {
-    if (alive) { phase.value = pending.value ? 'unknown' : 'error'; message.value = error.message }
+    if (alive && !requestLogin(error)) { phase.value = pending.value ? 'unknown' : 'error'; message.value = error.message }
   }
 }
 async function verify() {
   if (busy.value || !pending.value) return
   phase.value = 'verifying'; message.value = '正在核对照片版本…'
   try { await applyOutcome(replacementOutcome(await readCurrent(), pending.value)) }
-  catch (error) { if (alive) { phase.value = 'unknown'; message.value = `仍无法确认替换结果：${error.message}。请继续核对，不要新建修改。` } }
+  catch (error) { if (alive && !requestLogin(error)) { phase.value = 'unknown'; message.value = `仍无法确认替换结果：${error.message}。请继续核对，不要新建修改。` } }
 }
 function restore() {
   if (document.visibilityState === 'hidden' || busy.value) return

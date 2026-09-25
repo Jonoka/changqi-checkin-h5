@@ -117,8 +117,12 @@ export async function checkA2Browser({ call, evaluate, click, waitFor, ready, co
     const screenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
     await fs.writeFile(path.join(directory, `a2-browser-${width}.png`), Buffer.from(screenshot.data, 'base64'))
   }
+  // Deterministically deliver the idle photo-owner mismatch before the concurrent identity read.
+  await evaluate(`window.__a2IdentityFetch=window.fetch;window.fetch=async(...args)=>{const response=await window.__a2IdentityFetch(...args);if(args[0]==='/api/me')await new Promise(resolve=>window.__a2IdentityRelease=resolve);return response}`)
   await setCookie(otherCookie)
   await evaluate("window.dispatchEvent(new Event('pageshow'))")
+  await waitFor('window.__a2IdentityRelease && !document.querySelector(".saved-photo")', 'idle owner change removes old photo while authorized identity is held')
+  await evaluate('window.__a2IdentityRelease();window.fetch=window.__a2IdentityFetch')
   await waitFor(`document.querySelector('.point-count')?.textContent.trim() === ${JSON.stringify(`1/${totalCount}`)}`, 'same-page user switch replaces previous progress')
   await ready()
   assert.equal(await progress(), `1/${totalCount}`)

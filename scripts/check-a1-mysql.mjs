@@ -24,6 +24,7 @@ import { checkA4Pages, checkA4LastPoint } from './check-a4-browser.mjs'
 import { checkEntryMysql, checkEntryBrowser } from './check-entry.mjs'
 import { checkPhotoReplacementMysql, checkPhotoReplacementRestart } from './check-photo-replacement-mysql.mjs'
 import { checkPhotoReplacementBrowser } from './check-photo-replacement-browser.mjs'
+import { checkPhotoAuthBrowser } from './check-photo-auth-browser.mjs'
 const includeA4 = process.argv.includes('--a4')
 const includeA3 = process.argv.includes('--a3') || includeA4
 const includeA2 = process.argv.includes('--a2') || includeA3
@@ -456,6 +457,8 @@ try {
         if (includeA4) {
           photoChecks = await runPhotoChecks()
           await checkPhotoReplacementBrowser({ ...tools, ...photoChecks, activity, origin: 'http://localhost:5173' })
+          await checkPhotoAuthBrowser({ ...tools, ...photoChecks, activity, origin: 'http://localhost:5173' })
+          ok('PHOTO AUTH actual Chrome/MySQL: preflight/PUT/verify/image 401, repeated manual OAuth, saved/unsaved same-ID recovery, owner change and A-B-A isolation; restored photo/QR and one-time claim')
           ok('PHOTO actual Chrome: N saved images/full size, one inline editor, cancel/error/unknown, durable same-ID recovery, pending SQL commit, shared detail revision, late responses/user isolation and claimed/closed/missing states at 320/390/430px')
         }
         if (includeA4) {

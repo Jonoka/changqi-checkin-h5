@@ -257,7 +257,17 @@ export async function checkPhotoReplacementMysql({ pool, settings, activity, run
   const ui = await make('ui', activity.points.length), missing = await make('missing', activity.points.length)
   const missingRow = await record(missing.user)
   await fs.rm(path.join(runtime.uploadDir, missingRow.photo_path))
-  return { cookie: ui.client.cookie, otherCookie: b.client.cookie, missingCookie: missing.client.cookie,
+  const authA = await make('auth-a', activity.points.length), authB = await make('auth-b', activity.points.length, png)
+  // Separate observer sessions remain usable when the actual browser regenerates its OAuth session.
+  const authBrowser = browser(baseUrl), authOtherBrowser = browser(baseUrl)
+  await oauth(authBrowser, 'photo-test-auth-a'); await oauth(authOtherBrowser, 'photo-test-auth-b')
+  const auth = { cookie: authBrowser.cookie, otherCookie: authOtherBrowser.cookie,
+    ownerA: (await progress(authA.client)).userLabel, ownerB: (await progress(authB.client)).userLabel,
+    read: () => read(authA.client), invariant: () => invariants(authA),
+    digest: async () => digest(await fs.readFile(path.join(runtime.uploadDir, (await record(authA.user)).photo_path))),
+    otherDigest: async () => digest(await fs.readFile(path.join(runtime.uploadDir, (await record(authB.user)).photo_path))),
+    claim: () => anon.request(`/api/r/${authA.user.claim_code}/claim`, { body: {} }) }
+  return { auth, cookie: ui.client.cookie, otherCookie: b.client.cookie, missingCookie: missing.client.cookie,
     samplePath: path.join(directory, 'photo-fixtures', 'photograph.jpg'), pngPath: path.join(directory, 'photo-fixtures', 'second.png'), badPath: path.join(directory, 'photo-fixtures', 'damaged.jpg'),
     readUi: () => read(ui.client), uiProgress: () => progress(ui.client), uiInvariant: () => invariants(ui),
     changeUi: async () => { const row = await record(ui.user), otherRow = await record(b.user); const isPng = digest(await fs.readFile(path.join(runtime.uploadDir, row.photo_path))) === digest(await fs.readFile(path.join(runtime.uploadDir, otherRow.photo_path))); const id = randomUUID(); assert.equal((await putPhoto(baseUrl, ui.client, 'p01', isPng ? jpeg : png, row.photo_revision, id)).status, 200); return id },

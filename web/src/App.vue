@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { api, post } from './api.js'
-import { firstPending } from './photo-replacement.js'
+import { firstPending, needsPhotoLogin } from './photo-replacement.js'
 import { createScanner, loadWechatSdk } from './wechat-scan.js'
 import PhotoPanel from './PhotoPanel.vue'
 import ClaimPanel from './ClaimPanel.vue'
@@ -19,6 +19,8 @@ const selectedKey = ref('')
 const claimView = ref(false)
 const photoUncertain = ref(false)
 const photoEditing = ref(false)
+// Survives retiring photo components; only the existing explicit OAuth navigation bypasses this lock.
+const photoLoginRequired = ref(false)
 const claimUncertain = ref(false)
 const scanNotice = ref('')
 const scannedKey = ref('')
@@ -30,7 +32,7 @@ const scannerState = reactive({ phase: 'idle', message: '' })
 const inWechat = /MicroMessenger/i.test(navigator.userAgent)
 const signatureUrl = window.location.href.split('#')[0]
 const selectedPoint = computed(() => activity.value?.points.find((point) => point.key === selectedKey.value))
-const operationLocked = computed(() => photoEditing.value || uploadBusy.value || claimBusy.value || photoUncertain.value || claimUncertain.value)
+const operationLocked = computed(() => photoLoginRequired.value || photoEditing.value || uploadBusy.value || claimBusy.value || photoUncertain.value || claimUncertain.value)
 const identityProps = computed(() => ({ me: me.value, activity: activity.value, inWechat, identityState: identityState.value, identityMessage: identityMessage.value, locked: operationLocked.value }))
 const scanProps = computed(() => ({ activity: activity.value, me: me.value, inWechat, state: scannerState, locked: operationLocked.value, demoBusy: demoBusy.value, demoResult: demoResult.value }))
 // IdentityStatus owns loading/login/error copy; photo/scanner panels retain real failure feedback.
@@ -90,12 +92,19 @@ function setClaimBusy(value) {
 }
 
 function loginFailure(cause) {
-  if (cause.code === 'NEED_LOGIN') {
+  const photoAuthentication = cause.photoReplacement && needsPhotoLogin(cause)
+  // An idle pageshow may already be reading the new authenticated owner. Let that exact read finish;
+  // never make this exception for an edit/pending operation, a 401, or a new ordinary refresh.
+  const finishIdleIdentityRead = photoAuthentication && cause.code === 'PHOTO_OWNER_CHANGED' && identityBusy && !operationLocked.value
+  if (photoAuthentication || cause.code === 'NEED_LOGIN') {
+    if (photoAuthentication) photoLoginRequired.value = true
     me.value = null
     identityState.value = 'need-login'
     scannedKey.value = ''
-    identityMessage.value = '身份已失效，请重新进入活动'
-    stateRevision++
+    identityMessage.value = photoAuthentication
+      ? `${cause.code === 'PHOTO_OWNER_CHANGED' ? '当前微信用户已变化' : '微信身份已失效'}。请重新识别微信身份。${cause.pending ? '待核对修改标记已保留，返回后会先核对服务器照片版本。' : '未提交的照片需要重新选择；已有待核对标记仍按原用户保留。'}`
+      : '身份已失效，请重新进入活动'
+    if (!finishIdleIdentityRead) stateRevision++
     scanNotice.value = ''
   }
 }
@@ -193,6 +202,7 @@ async function loadMe(automatic = false) {
     const state = await api('/api/me')
     if (revision !== stateRevision || uploadBusy.value) return
     updateMe(state)
+    photoLoginRequired.value = false // Only a non-stale, already-authorized identity read can reach here.
     identityState.value = 'ready'
     try { sessionStorage.removeItem('changqi.oauth-attempt') } catch { /* No stored identity. */ }
     // SDK readiness is independent of identity/native upload. Never await it in this state read.
@@ -202,8 +212,10 @@ async function loadMe(automatic = false) {
     me.value = null
     scannedKey.value = ''
     scanNotice.value = ''
-    identityState.value = cause.code === 'NEED_LOGIN' ? 'need-login' : 'error'
-    identityMessage.value = cause.message
+    identityState.value = photoLoginRequired.value || cause.code === 'NEED_LOGIN' ? 'need-login' : 'error'
+    identityMessage.value = photoLoginRequired.value
+      ? '微信身份尚未核对完成，请重新识别微信身份。待核对修改标记仍按原用户保留。'
+      : cause.message
     if (automatic && cause.code === 'NEED_LOGIN') tryAutomaticLogin()
   } finally { identityBusy = false }
 }

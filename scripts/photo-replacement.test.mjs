@@ -50,6 +50,33 @@ test('Replacement: reload markers are owner/point scoped, bounded metadata and n
   assert.throws(() => savePending(operation, { setItem() { throw new Error('blocked') } }), /尚未提交/)
   assert.throws(() => savePending({ ...operation, expectedRevision: '../file' }, storage), /无效/)
 })
+test('Replacement authentication: verification NEED_LOGIN survives response loss and repeated 401', async () => {
+  const operation = op()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cause = failed('NEED_LOGIN')
+    await assert.rejects(replaceWithRecovery({ operation, priorUnknown: true,
+      upload: async () => { throw new Error('SIMULATED lost response') },
+      readInventory: async () => { throw cause }
+    }), error => error === cause)
+  }
+})
+test('Replacement authentication: PUT identity errors stop for explicit authorization, not generic unknown', async () => {
+  for (const code of ['NEED_LOGIN', 'PHOTO_OWNER_CHANGED']) {
+    const cause = failed(code); let reads = 0, writes = 0
+    await assert.rejects(replaceWithRecovery({ operation: op(), priorUnknown: true,
+      upload: async () => { writes++; throw cause },
+      readInventory: async () => { reads++; throw new Error('offline') }
+    }), error => error === cause)
+    assert.equal(writes, 1); assert.equal(reads, 0)
+  }
+})
+test('Replacement authentication: changed inventory owner remains typed and never confirms old operation', async () => {
+  const operation = op()
+  await assert.rejects(replaceWithRecovery({ operation,
+    upload: async () => { throw new Error('lost') },
+    readInventory: async () => inventory(operation, operation.replacementId, { userLabel: 'CQ999999' })
+  }), { code: 'PHOTO_OWNER_CHANGED' })
+})
 test('Replacement: initial/UUID revisions are accepted, paths, arrays and malformed IDs rejected', () => {
   assert.equal(validPhotoRevision('initial'), true); assert.equal(validPhotoRevision(randomUUID()), true)
   for (const value of [null, '', [], '../photo.jpg', 'A'.repeat(36), randomUUID().toUpperCase()]) assert.equal(validPhotoRevision(value), false)
