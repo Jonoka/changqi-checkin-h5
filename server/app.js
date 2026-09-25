@@ -46,7 +46,7 @@ export function createApp({ activityConfig, pool = null, runtime = runtimeConfig
   // Invalid/non-WeChat /q exits before session storage, even with an old login cookie.
   mountGuide(app, activityConfig, runtime)
   mountPublicClaims(app, { pool, runtime, activityConfig })
-  mountStats(app, { pool, runtime })
+  mountStats(app, { pool, runtime, activityConfig })
   app.use('/r', (_request, response, next) => { response.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); next() })
   if (sessionMiddleware) {
     app.use(['/api', '/auth'], sessionMiddleware)
