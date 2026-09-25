@@ -6,9 +6,11 @@
 
 ## 0. 当前真实状态
 
-### 2026-09-25 · 只读统计、CSV 与受控照片导出（本地验证通过，待 Draft 交接；未部署）
+### 2026-09-25 · 只读统计、CSV 与受控照片导出（本地验证通过，Draft PR #2；未部署）
 
 已核对 PR #1 实际 merged/closed、合并提交 cd4c18d、已验收 head a399d54；远端/Windows main 同为 `7885c4e62da0d771c1d400cfdaa7caf7de5b3a44`，全量 porcelain 干净，无开放 PR、无同名目标分支。从此 main 新建 `feat/stats-photo-export`，不继续旧分支。按用户新需求最小更新 PRD/SPEC，以下既有发布和真机历史全部保留。本轮仅实现/隔离验证，不连接生产、不发布、不触发 Actions、不改活动配置/地图/分享/正式二维码。
+
+实现提交 `1eced29756f62cb91daa56a9d6e9ce83bea31fa8` 已由Windows正常提交并推送；新建 [Draft PR #2](https://github.com/Jonoka/changqi-checkin-h5/pull/2)，base/main仍为 `7885c4e62da0d771c1d400cfdaa7caf7de5b3a44`，已回读 open/draft=true/merged=false。此后只补本段交接记录，不改变已验证运行时代码；最终分支HEAD以Git/PR回读为准。没有转Ready、合并或提交构建请求。
 
 实现共享 `activity-reports.js` / `report-csv.js`：唯一服务端配置、精确当前 key、动态非空 N、BIGINT 字符串 CQ，短同 connection 只读一致快照；参与/完成/领取/完成未领取独立按条件计算，缺图不撤销打卡，异常领取只提示。北京时间每日事件先聚合完整记录再分组。可选 `STATS_EXCLUDE_CQ_FILE` 默认空，规范名单失败即报错，只公开启用及匹配数。`/stats` 保留既有样式、固定凭据、手动刷新；三个固定 `/stats/export/{summary,points,daily}.csv` 同样先认证。CSV 为 BOM UTF-8、中文、正确转义/公式防护，网页仅聚合资料。
 
