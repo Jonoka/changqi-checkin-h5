@@ -1,26 +1,28 @@
 # SPEC · 长岐村漫游打卡
 
-**v1.4 · 2026-09-21 · 两种开发入口与轻量容器发布；业务合同不变**
+**v1.7 · 2026-09-24 · 微信分享卡片固定公开入口**
 
-本文件承接 [PRD.md](PRD.md)，替代旧 TSD。它规定必须发生的行为和最低技术约定，不新增管理平台或防刷模块。示例不代表代码已经存在；真实微信权限尚未核验。
+本文件承接 [PRD.md](PRD.md)，替代旧 TSD。它规定必须发生的行为和最低技术约定，不新增管理平台或防刷模块。示例不代表已经执行验收；本地、用户已确认的微信真机结果与本轮新增能力分别记录在 TASKS。
 
 ## S01 · 配置与活动开关
 
 一个服务端 `config/activity.json` 为唯一活动配置来源。至少含 `activityName`、`enabled`、`rules`、`claimLocationText`、公众号名称/引导资源、`points`。每个地点含 `key`、`name`、`image`、`displayOrder`；当前 key/name 按 PRD 表格。
 
-`points` 必须非空、key 唯一；错误配置启动时报错，不能把 0/0 判为全部完成。所有地点必达，N 从配置得出。活动前可调整；活动中不变更必达 key 集合。只改名称不会丢记录，不开发规则迁移。
+`points` 必须非空、key 唯一；错误配置启动时报错，不能把 0/0 判为全部完成。所有地点必达，N 从配置得出。活动前可调整；活动中不变更必达 key 集合。记录按 key 关联，不开发规则迁移；已定版印刷码不得重新分配 key/地点绑定。
 
 `enabled=false` 时仍可读取已有进度、已领取状态及人数，禁止新扫码打卡、新上传和首次领取；已领取者重复确认返回原状态。前端提示“活动暂未开放或已结束”。不另做活动日期调度系统。
 
 ## S02 · 身份与入口
 
-拟采用微信公众号网页授权 `snsapi_base` 获取 OpenID，服务器创建/读取同一用户并建立普通会话；不请求昵称、头像或手机号。回调保留常规 `state` 校验与固定回调地址。身份取自微信服务器，不能由浏览器自行指定 OpenID。
+复用微信公众号网页授权 `snsapi_base` 获取 OpenID，服务器通过 code 交换、findOrCreateUser 读取/创建同一用户；不请求昵称、头像、手机号或关注状态。直接 `/q/` 每次重新识别一次当前微信用户，不盲信旧 Cookie 或假定两入口共享 Cookie。服务端 oauth 上下文保存已校验 entryPointKey/returnTo/state；固定 `/auth/callback` 验证 state，先保存已校验的局部地点上下文，再 regenerateSession，写真实 userId 和有效地点，等待 saveSession 成功后跳 `/#point/:key`，不回 `/q/` 循环。页内扫码复用当前会话，不给 `/api/me` 或 hash 切换增加授权。
+
+state/code/微信/会话保存失败停止自动跳转，显示识别错误与手动重试；优先保留服务端已校验的 `/q/:key`。Cookie 不可用不循环授权；既有随机 OAuth state 可携带一个仅用于失败后手动重试的公开地点提示（纯字母数字、总长不超过128），缺失 Cookie 时仍先验证该 key 属于活动配置再生成本站 `/q/:key` 重试地址。该提示绝不作为身份或上传资格；认证必须与服务器保存的完整随机 state 恒时比较通过，授权地点只取服务器 oauth 上下文，不新增票据或表。MicroMessenger 只做环境分流，不能代替真实认证。浏览器提交的身份/进度/领取时间均不可信。
 
 同一个 OpenID 重进对应同一行 `users`，业务记录在 MySQL 中；不以 localStorage 的临时游客 ID 作为生产身份。会话过期后重新授权恢复记录。API 会话失效返回 `NEED_LOGIN`，不能跳转一串 HTML 被前端当成上传成功。
 
 使用成熟会话中间件及 MySQL 持久化适配器；可由组件额外维护 `sessions` 技术表。HTTPS、HttpOnly 和普通同源 Cookie 设置沿用组件，不自研认证系统，不新增 Redis。密钥只在服务端。
 
-普通浏览器访问游客活动页可提示“请在微信内打开”；不影响公开引导页、派发页和人数页的正常访问。真实公众号不支持拟定能力时报告具体阻塞，不擅自更换成手机号注册或新增一套认证。
+微信外游客首页/地点入口显示“请使用微信打开”，不依赖数据库、不因旧 Cookie 开放参与；仅对游客入口分流，不使用全站 UA 拦截器，不影响 API、静态资源、匿名 `/r/` 和受保护 `/stats`。`/q/`、授权和本人状态 no-store，分流页按需 Vary: User-Agent，不影响静态图片缓存。真实公众号不支持拟定能力时报告具体阻塞，不擅自更换成手机号注册或新增一套认证。
 
 开发模拟身份/扫码仅限显式开发模式，界面标“开发演示”；生产模式下禁用，配置错误时不能悄悄退回模拟。模拟通过不能替代微信真机验证。
 
@@ -28,9 +30,21 @@
 
 ### 地点二维码
 
-固定 URL：`${PUBLIC_ORIGIN}/q/:pointKey`，例如 `/q/p01`。只允许配置中的 key。
+固定 URL：`${PUBLIC_ORIGIN}/q/:pointKey`，只允许配置中的 key。生产约定 `PUBLIC_ORIGIN=https://cq.fsxinhuo.cn`（无末尾斜杠），菜单计划入口 `https://cq.fsxinhuo.cn/`，OAuth 固定回调 `https://cq.fsxinhuo.cn/auth/callback`。本地/测试继续读取各自 PUBLIC_ORIGIN，不全局替换 localhost。
 
-直接打开合法 `/q/:pointKey` **始终显示公众号/菜单引导**，即使游客已登录也不直接跳上传。无效 key 提示“地点不存在，请扫描现场活动二维码”。GET 不写打卡状态，也不设置扫码资格。
+定版载荷如下，每处只制作一张固定码，微信直接扫与 H5 页内扫共用；文本不带空白、换行、查询、hash、路径末尾斜杠或短链：
+
+| key | 地点 | 二维码完整文本 |
+| --- | --- | --- |
+| p01 | 葫芦娃 | `https://cq.fsxinhuo.cn/q/p01` |
+| p02 | 卢氏大宗祠 | `https://cq.fsxinhuo.cn/q/p02` |
+| p03 | 沉香古井 | `https://cq.fsxinhuo.cn/q/p03` |
+| p04 | 苞榕 | `https://cq.fsxinhuo.cn/q/p04` |
+| p05 | 文笔山顶 | `https://cq.fsxinhuo.cn/q/p05` |
+
+印刷后域名、`/q/` 路径和 key/地点绑定不变，显示顺序和插画调整不重编 key。业务数量仍从配置动态读取，不因本次印五张而写死 N。
+
+微信内直接打开合法 `/q/:pointKey` 自动发起一次上述 OAuth，回调成功后直达对应地点并取得会话上传资格；无论微信扫一扫、转发链接或旧 Cookie 均按当前 OAuth 身份处理。不要求先关注或回公众号菜单，不要求二次 H5 扫码。微信外仅引导；无效 key 明确报错且不发起授权。GET/OAuth 不写 checkins、不增加进度；活动关闭仍识别和查看原记录，但返回空资格，不允许新上传或首次领取。
 
 活动页内“扫一扫打卡”拟通过 `wx.scanQRCode({needResult: 1, scanType: ['qrCode']})` 获得结果，再提交 `POST /api/scan`，不是直接访问扫描出的链接。服务器解析 URL，匹配实际活动域名、`/q/` 路径和有效 key，保存普通会话的 `scannedPointKey` 并返回地点信息；会话保存完成才返回成功。前端进入对应上传页。
 
@@ -44,15 +58,21 @@
 
 `access_token`、`jsapi_ticket` 按微信返回的有效期复用；不每次扫码重新申请。不未经授权修改现有公众号消息服务；若已有第三方托管，先核对凭据管理方式。正式实现前按官方文档和实际账号验证，不能认为有 AppID 就一定可用。
 
+### 微信分享卡片
+
+JS-SDK ready 后统一调用 `wx.updateAppMessageShareData` 和 `wx.updateTimelineShareData`；现有 SDK 提供旧分享 API 时只作兼容回退，不另建分享系统。聊天/群聊、朋友圈及旧接口的标题固定为“2026三水区芦苞镇长岐古村黄金节庆影视游园季活动”，HTML 文档 title/og:title 使用同一完整标题，不手工截断或加省略号。`activityName` 和页面内首页 h1 仍为“长岐村漫游打卡”。描述固定为“微信扫码参与长岐村漫游打卡，上传现场照片，集齐地点后现场领取礼品。”，图片固定为 `https://cq.fsxinhuo.cn/share/share-card-v1.jpg`，链接固定为 `https://cq.fsxinhuo.cn/`。
+
+首页、地点 hash、游客 `/#claim` 和匿名 `/r/:claimCode` 均不得把当前 URL 当成分享目标；OAuth `code/state`、`scannedPointKey`、领取码和统计页路径不得进入分享数据。匿名派发页可取得经同域 URL 校验的 JS-SDK 签名，但不因此取得登录身份、照片或领取权限。非微信环境不加载分享 SDK、不报错。SPA HTML 同步提供 title、description、`og:title`、`og:description`、`og:image`、`og:type=website` 和固定 `og:url` 作为兜底。
+
 ### 游客领取二维码
 
-每用户一个固定随机 `claimCode`，例如随机 16 字节编码为 32 位十六进制字符；保存后不频繁变化。链接为 `${PUBLIC_ORIGIN}/r/:claimCode`，全部完成后展示，不提前印刷。
+每用户一个固定随机 `claimCode`，例如随机 16 字节编码为 32 位十六进制字符；保存后不频繁变化。游客领取视图为 `/#claim`；其展示的二维码链接为 `${PUBLIC_ORIGIN}/r/:claimCode`，供持码者打开派发页，全部完成后展示，不提前印刷。地点码不得用该链接或 `/#point/:key` 替代。
 
 该链接直接打开派发确认页，不要求关注、登录或员工账号。持码即能确认是本期接受的简化；码不动态刷新、不设过期票据或新增核销系统。无效码只显示凭证不存在。读取页面不更新领取状态。
 
 ## S04 · 单照片上传
 
-原生文件选择、预览和重选，允许现场拍照或相册选择。只实现一条 multipart 上传链路，不再做微信媒体下载等备用系统。
+原生文件选择、预览和重选，允许现场拍照或相册选择。直达入口不等待 wx.ready，SDK 初始化失败只影响下一次页内扫一扫，不能清空身份或阻止已有资格的上传。只实现一条 multipart 上传链路，不再做微信媒体下载等备用系统。
 
 输入为 `pointKey` 和 `photo`；用户身份从会话取得。支持经实测可解码的 JPEG/PNG/WebP；源文件上限 15 MiB。服务端检查实际图片类型、可解码性与大小，不能只信扩展名。使用成熟图片库纠正方向、最长边不超过 1600 px（小图不放大）、输出 JPEG 质量约 80。不能解码的格式明确提示重新拍照或转换为 JPG/PNG，不自研 HEIC 转换。
 
@@ -60,9 +80,21 @@
 
 上传中禁用重复提交；失败不点亮。超时先重新查询本人记录：已成功则展示完成，确实未成功才让游客重试。刷新导致本地未上传文件丢失时提示重选，不承诺断点续传。
 
-成功记录不提供修改、删除或覆盖。已完成地点的重复请求返回已有结果，不报成系统故障。普通会话失效时先重新登录恢复进度；尚未完成且扫码信息丢失，则提示重新扫码。
+首次 POST /api/checkins 重试仍不覆盖已有记录。显式替换使用独立 PUT 协议，只更新已有记录的 photo_path 与 photo_revision，不改变进度、原时间、用户、地点或领取信息。普通会话失效时先重新登录恢复进度；尚未完成且扫码信息丢失，则提示重新扫码。
 
 本人照片通过会话鉴权接口读取，不直接暴露磁盘路径，不让其他游客或派发页查看。照片用途提示：“照片用于本次活动打卡记录，不公开展示。”结束后的清理由运营通知后人工安排；照片已清理不能使历史打卡失效，也不建设自动清理模块。
+
+### 2026-09-24 · 现场核查和显式替换
+
+GET /api/me/photos 返回本人照片元数据、revision、可修改状态；PUT /api/me/photos/:pointKey 接收 photo、expectedRevision、replacementId。身份只取会话；仅活动开启、本人已有且未领取可新修改，无需重扫。每次新操作随机 UUID，重试复用原 ID 与旧版本；当前同 ID 只确认，其他新版本冲突。photo_revision 初值 initial，幂等增量迁移兼容旧记录，不清库。
+
+先处理新图和随机文件，再同 connection 短事务按 users→checkin 加锁，检查领取、归属与版本，原行原子更新路径/版本。两路领取共用 users 行锁。确认新引用后才删旧文件；确定失败留旧图，COMMIT 不明且回读失败保留可能有效的新旧图并返回待核对；旧文件清理失败记录待清理，不误报替换失败。
+
+替换恢复不看 completedKeys：版本等于本次 ID 才成功；仍为旧版本且请求未决只能继续核对或同 ID 受控重试；其他版本冲突；查询失败保持锁。sessionStorage 只存按已鉴权游客编号/地点隔离的最小未决标记和文件摘要，不存照片/Cookie/OpenID，不作为身份。刷新恢复记录，未提交文件需重选。
+
+/#claim 按编号/完成状态→核查提示→配置顺序 N 张完整照片→二维码/领取展示，默认手机单列，逐张加载/失败重试/大图。卡片原地单张编辑，复用详情 PhotoPanel，保留旧图并区别待提交预览，提供确认替换照片/取消修改；取消不写入，成功读服务器新图并留本页。编辑时隐藏码并禁本页领取，上传/核对/未知持锁并保护 hash/back，不因卸载丢状态。已领取/活动关闭只读。不保存人工审核状态，不增加跨设备审核锁；匿名 /r 不具照片权限。
+
+图片按用户+地点+revision读取，no-store，响应声明版本必须对应真实字节；丢弃迟到响应/旧用户图片并释放 blob URL。增量迁移必须进入运行镜像；本轮仅本地测试不迁移生产，回退保留兼容字段和游客数据。
 
 ## S05 · 进度和页面状态
 
@@ -85,7 +117,7 @@
 | 重复或两边同时确认 | 返回同一领取结果，计数只增加 1，不覆盖首次时间/渠道 |
 | 网络或保存失败 | 不显示假成功；先查询最新状态，再决定是否重试 |
 
-两条接口复用 `markClaimed(userId, source)`。用户已领取直接返回原结果；否则确认活动开启且全部完成，再执行一次条件更新并重新读取数据库结果：
+两条接口复用 `markClaimed(userId, source)`。同一个 connection 开启短事务，先 SELECT users FOR UPDATE，与显式照片替换共用锁顺序。用户已领取返回原结果；否则确认活动开启且全部完成，再条件更新、读取结果并 COMMIT。异常 rollback/release；COMMIT 回应未知销毁该连接，由客户端重新核对，不当作未发生：
 
 ```sql
 UPDATE users
@@ -123,7 +155,7 @@ FROM users WHERE claimed_at IS NOT NULL;
 | 表 | 必需字段与约束 |
 | --- | --- |
 | users | `id BIGINT UNSIGNED` 主键；`openid VARCHAR(64)` 唯一且区分大小写；`claim_code CHAR(32)` 唯一；`claimed_at DATETIME NULL`；`claim_source VARCHAR(8) NULL`；`created_at DATETIME` |
-| checkins | `id BIGINT UNSIGNED` 主键；`user_id BIGINT UNSIGNED` 关联 users；`point_key VARCHAR(32)`；`photo_path VARCHAR(255)`；`created_at DATETIME`；`UNIQUE(user_id, point_key)` |
+| checkins | `id BIGINT UNSIGNED` 主键；`user_id BIGINT UNSIGNED` 关联 users；`point_key VARCHAR(32)`；`photo_path VARCHAR(255)`；`photo_revision VARCHAR(36) ascii_bin NOT NULL DEFAULT 'initial'`；`created_at DATETIME`；`UNIQUE(user_id, point_key)` |
 
 领取码区分大小写并由安全随机函数生成；无需加密业务表。SQL 使用参数化查询。外部只输出显示编号，例如 CQ000123；不返回 OpenID、数据库口令或服务器路径。时间在本项目统一按中国标准时间 UTC+8，API 输出含 `+08:00` 的时间串。
 
@@ -131,7 +163,7 @@ FROM users WHERE claimed_at IS NOT NULL;
 
 JSON 正常结果统一 `{ok:true,data:{...}}`；错误统一 `{ok:false,error:{code,message}}`。图片、HTML 与 OAuth 跳转除外。已完成/已领取的重复操作返回正常已有状态，而不是再次累加或 500。
 
-`/api/me` 的最小状态：`userLabel`、`completedKeys`、`completedCount`、`totalCount`、`allCompleted`、`claimedAt`、`claimUrl`。`claimUrl` 在未全部完成时为 null；`claimedAt` 未领取为 null。提交打卡/本人领取后返回更新后的同类状态。
+`/api/me` 的最小状态：`userLabel`、`completedKeys`、`completedCount`、`totalCount`、`allCompleted`、`claimedAt`、`claimUrl`、`scannedPointKey`。资格只来自当前服务端会话及有效配置；无资格或活动关闭为 null，公开派发响应不含该字段。App 身份读取后集中同步，不能从 hash/query/localStorage 推断；上传/领取返回未包含该字段时，同一用户不误清空资格，切换用户必须清空旧资格/照片。保留 stateRevision 和上传/领取忙碌与未知锁，旧状态响应不能覆盖后来扫码的新地点。刷新恢复已保存记录/会话资格，不保留未提交本地文件。`claimUrl` 未全部完成为 null，`claimedAt` 未领取为 null；提交后返回更新后的同类状态。
 
 | 方法 / 路由 | 约定 |
 | --- | --- |
@@ -141,15 +173,17 @@ JSON 正常结果统一 `{ok:true,data:{...}}`；错误统一 `{ok:false,error:{
 | GET /api/wechat/js-config?url=... | 校验同域页面 URL 后生成配置，不输出 AppSecret |
 | POST /api/scan | JSON `{result:扫描原始文本}`；返回 `{point,alreadyCompleted}`，保存扫码地点到会话 |
 | POST /api/checkins | multipart：`pointKey`、`photo`；保存后返回本人状态 |
-| GET /api/me/photos/:pointKey | 仅本人读取已保存图片；清理后返回明确无图状态 |
+| GET /api/me/photos | 会话本人 `{userLabel,enabled,claimedAt,photos}`，按配置排序；每项 `pointKey,revision,createdAt,canReplace`，无磁盘路径 |
+| GET /api/me/photos/:pointKey | 仅本人字节；revision/owner 一致性条件可选，前端必传；返回对应 X-Photo-Revision/X-Photo-Owner，no-store，缺图 410 |
+| PUT /api/me/photos/:pointKey | multipart：photo、expectedRevision、replacementId；只更新本人已有记录，返回最新照片元数据；不需要再次扫码 |
 | POST /api/me/claim | 本人确认，渠道 self；返回本人最新状态 |
-| GET /q/:pointKey | 地点引导页，不设置扫码资格 |
+| GET /q/:pointKey | 先校验地点；微信内重新 OAuth 并直达，微信外仅引导；回调成功且活动开放才登记会话资格 |
 | GET /r/:claimCode | 派发页，只读打开，不要求员工登录 |
 | GET /api/r/:claimCode | 仅返回对应游客显示编号、X/N、allCompleted、claimedAt；无照片、OpenID |
 | POST /api/r/:claimCode/claim | 对该游客确认派发，渠道 staff；返回同一公开状态 |
 | GET /stats | 固定凭据保护的只读人数页；可直接服务端渲染，不强制多写一个 API |
 
-常见错误：`NEED_LOGIN` 401；`PLEASE_SCAN` 403；`INVALID_POINT`/`INVALID_CLAIM_CODE` 404；`INVALID_QR` 400；`IMAGE_TOO_LARGE` 413；`UNSUPPORTED_IMAGE` 415；`NOT_COMPLETED`/`ACTIVITY_DISABLED` 409；保存失败 `UPLOAD_FAILED` 或 `SAVE_FAILED` 500。前端显示可理解提示与重试路径，服务端记录异常，不向游客泄露堆栈或凭据。
+常见错误：替换专用 `PHOTO_CONFLICT`/`PHOTO_OWNER_CHANGED`/`ALREADY_CLAIMED` 409、`PHOTO_NOT_FOUND` 404、`INVALID_REPLACEMENT` 400、确定失败 `REPLACEMENT_FAILED` 500、未决 `REPLACEMENT_UNCERTAIN` 503。`NEED_LOGIN` 401；`PLEASE_SCAN` 403；`INVALID_POINT`/`INVALID_CLAIM_CODE` 404；`INVALID_QR` 400；`IMAGE_TOO_LARGE` 413；`UNSUPPORTED_IMAGE` 415；`NOT_COMPLETED`/`ACTIVITY_DISABLED` 409；保存失败 `UPLOAD_FAILED` 或 `SAVE_FAILED` 500。前端显示可理解提示与重试路径，服务端记录异常，不向游客泄露堆栈或凭据。
 
 ### 必要环境配置
 
@@ -159,9 +193,15 @@ JSON 正常结果统一 `{ok:true,data:{...}}`；错误统一 `{ok:false,error:{
 
 参考 [视觉说明](../assets/reference/README.md)。主色与插画方向不重设计；当前参考稿不构成精确地理位置或真实建筑形态的证据。
 
-首页/示意地图可合并；打卡成功可用弹层。必须有真实上传预览、提交中、失败、已完成、未达标不可领取、待领取、已领取及无效二维码状态。去掉参考图的手机边框和小程序胶囊。
+首页以插画漫游地图为主体，地点列表默认折叠；品牌、紧凑进度、扫一扫主操作、地图、列表和规则依次组织。扫一扫位于地图上方，正常进入活动的手机首屏完整可见；就绪后不展示“扫一扫已就绪”，初始化、取消、错误和重试提示仍保留。详情使用现有 `#point/:key` 路由独立呈现返回地图、无边框地点标题、对应插画、紧凑进度与上传区，不展示拍照提示，不在前面重复首页大卡片。游客可见文案不加“本人”前缀/后缀，使用“刷新状态”“现场照片”“领取凭证”；只精简展示，所有会话鉴权与用户隔离不变。领取区使用 `#claim`；`/r/:claimCode` 仅为工作人员派发页，游客主操作不跳往该页面。合法地点 guide 页标题统一“参与方式”，无效地点仍显示明确错误。
 
-名称与数量不烘焙进插画。首页说明只写“上传现场照片”，不出现装置选项；不得宣称“非现场绝对无法打卡”。地点文字与 PRD 一致。两张不同手机宽度截图即可作本地视觉检查，不增加全量视觉回归平台。
+地图与地点插画沿用 `assets/reference/` 的乡村绘画方向。地点详情继续使用 RASTER_HANDOFF 的五张独立 PNG 母版及等比例 WebP；地图改用用户最终确认的完整现场地图成图，原始 PNG 字节保留并等比例派生运行 WebP，不重新生图、裁切或绘制路线。五个地点名称、编号、粉色路线和兑奖处均属于地图图片层，页面不得再叠加可见路线、兑奖处、编号、地点名或完成状态。地图按 1377:1142 完整缩放，不 stretch、cover 裁切或随 N 拉长；同一定位容器只保留五个 40px 透明查看热点，热点由唯一活动配置中的 `point.key` 与 `mapPosition:{x,y}` 驱动，保留 title/aria-label，点击只进入详情且不授予扫码资格。没有 `mapPosition` 的新增地点仅从既有折叠列表访问；移除配置地点即移除相应热点，不改变动态进度、扫码门禁或领取逻辑。地图内路线只作游览参考，不规定打卡顺序。
+
+`points[].image` 供详情和列表按 key 关联同一地标，可选 `imageAlt`、`imagePosition`（两个 0–100% 焦点）、实际 `imageWidth/imageHeight`；保留 `photoTip` 配置兼容但不展示。图片按实际比例展示，不统一强拉伸或共用巷道图。当前五处须有对应可识别图片；清理失败或清晰度不足的素材不以占位图当成交付。图片仍为概念插画，不是实景或精确地理图。普通 UI 图标、正式地点二维码 PNG/SVG 与游客领取码不受插画来源变更影响。公众号可配置 `wechat.officialAccountQr` 为本地真实二维码图片；未配置时仍展示微信扫一扫及可选公众号入口说明，不强制关注，不生成替代假码。
+
+未扫码主操作为扫一扫；已扫码未选图的入口文案为“上传现场照片”（仍先打开原生选择器）；选图后为提交、重选为次操作。上传及核对锁定沿用 A2；结果未知仅突出核对，连续失败不解锁重复提交。成功在当前位置提供继续探索；最后一处完成提供本人领取凭证入口。已领取与关闭状态如实展示，不诱导再次领取。保留预览、文件大小限制、二次领取确认和 A1–A3 全部安全约束。业务文字、固定数字、假二维码、框架与原稿按钮不烘焙进素材。
+
+布局检查覆盖 320/390/430px、五处详情、折叠/展开、上传/未知/成功、全部完成/已领取、派发与公众号引导。A4 用户已确认的效果不重新探索；运行时源码/素材无变化时，核对指纹后复用已确认证据，实时业务和布局断言仍执行。有布局修复只补受影响页面及必要回归证据，不能用图片加载成功或截图数量代替视觉检查。首期不增加全量视觉回归平台；真实微信结果独立记录。
 
 ## S10 · 两种开发入口、构建、部署与二维码交付
 
@@ -189,9 +229,26 @@ Nginx 请求体限制与 15 MiB 图片上限一致留余量。`UPLOAD_DIR` 挂�
 
 ### 二维码交付
 
-二维码生成脚本读取 `PUBLIC_ORIGIN` 与地点配置，输出每处 PNG、SVG，以及 key/名称/URL 对照清单。二维码保留黑白对比和足够空白边（四周至少 4 个模块），不套用效果图里的假码。默认先做约 5 cm 样张试扫；不是所有距离下都可扫的保证。
+`npm run qr:points -- --origin https://cq.fsxinhuo.cn --out tmp/point-qrs-cq-fsxinhuo-cn` 读取唯一地点配置；也可显式配置 PUBLIC_ORIGIN，不使用隐含开发地址。正式模式核对 S03 五组 key/name，每个生成 URL 调用现有 parsePointQr 校验，不放宽解析规则。缺配置、重复 key、非法 URL 或既有输出目录均失败退出；测试地址须显式 `--test` 且使用另一个新目录。
 
-测试码必须标“测试，不可正式印刷”；正式域名未定或未核验时只交生成脚本，不产生冒称正式的印刷包。生产每处二维码均经真实扫码核对后再印刷。个人领取码运行时显示，不提前印刷。
+复用现有 qrcode 库输出每处独立 PNG/SVG，黑码白底、M 纠错、margin 4、PNG scale 24，不加 Logo、阴影、装饰、渐变或模糊缩放。导出 manifest、UTF-8 CSV、离线核对/打印页及说明，清单从配置生成并带完整 URL/文件名，可记录源提交、实际源文件哈希、命令、时间和成品哈希，不含凭据。纸样地名、URL 和警示均在码外；约 5 cm 指含四模块白边的试印起点，不保证任意距离可扫。
+
+地址、文件、试扫与批量印刷分四层，不互相替代：
+
+| 层级 | 通过条件 |
+| --- | --- |
+| 地址定版 | 正式域名、路径及 key/地点绑定确认；不等于 DNS、证书、部署版本或微信链路已验 |
+| 样张生成 | 每处 PNG/SVG、清单和核对页完成；用现成工具回读实际 PNG 和 SVG 栅格图，核对完整文本并另记解码结果，无工具时写“解码未验证” |
+| 试扫通过 | 获授权联调环境下，iOS/Android 微信的直接扫与 H5 页内扫均正确，且约 5 cm 真实纸样逐张在实际材质、光线、距离下试扫；扫码不等于上传完成 |
+| 可批量印刷 | 五处内容、微信两类入口和真实纸样全部通过，再交用户批准；自动解码或 A4 视觉不能替代 |
+
+正式域名已定但公网链路未就绪时，仍交付带最终载荷的“待验证纸样”，外围说明和 ZIP 必须标“正式地址已定，待真机/纸样试扫，不可直接批量印刷。”不遮挡码面或改载荷。测试输出另标“测试，不可正式印刷”。二维码生成/交付不依赖生产数据库、真实公众号密钥、Docker 或 Actions artifact；无需等待 A6.1/A6.2 全部完成。个人领取码与测试照片不打包。
+
+现场牌面：使用微信扫一扫现场地点二维码，打开页面并上传现场照片。也可从‘印象芦苞’公众号进入活动，使用页面内扫一扫。不得写“扫码即完成”。既有五个固定载荷、PNG/SVG 不变；旧纸样包保留并附更正说明，不因说明变更要求重印码图。
+
+### 轻量 UI 展示约定
+
+首页与所有地点状态不展示游客 CQ 编号；仅 `/#claim` 领取凭证/已领取记录和 `/r/:claimCode` 派发页展示对应真实 `userLabel`，称为“游客编号”。API、身份切换 key、数据库编号及领取码不变。首页进度下方、地图上方按状态只保留扫一扫或领取主操作；已领取显示次级记录入口，关闭活动不允许首次领取。地点提示按当前用户、地点完成状态与内存扫码状态派生；加载/读取失败/需授权由身份区互斥展示，真实业务错误与重试入口保持。既有插画、折叠列表和扫码校验不变。
 
 ## S11 · 验收条件
 
@@ -199,7 +256,7 @@ Nginx 请求体限制与 15 MiB 图片上限一致留余量。`UPLOAD_DIR` 挂�
 | --- | --- | --- |
 | AC-01 | 配置 key 唯一、N 动态；空集合/重复 key 拒绝启动；关闭活动不允许新增记录或首次领取 | 本地配置/API |
 | AC-02 | 公众号菜单进入并重进，恢复同一身份与进度；两用户和本人照片不串用 | API + 微信真机 |
-| AC-03 | 直接扫地点码进入引导；页内扫同码进入正确上传地点；地图点击不取得提交资格 | API + 微信真机 |
+| AC-03 | 微信直接打开有效 /q 经真实 OAuth 身份交换直达对应地点可上传；微信外即使旧 Cookie 也引导；页内 /api/scan 保留；地图/hash 不授资格；两入口同 OpenID 恢复同用户 | API + 微信真机 |
 | AC-04 | 扫码取消、错码、未就绪和权限失败可恢复，错误不假成功 | 本地解析 + 微信真机 |
 | AC-05 | iOS、Android 实际拍照/相册选择、预览、重选、提交可用 | 微信真机 |
 | AC-06 | 超大/损坏/不支持图片或保存失败不记完成，清理本次无效文件 | 本地/API/MySQL |
@@ -210,16 +267,20 @@ Nginx 请求体限制与 15 MiB 图片上限一致留余量。`UPLOAD_DIR` 挂�
 | AC-11 | 两名测试游客各领取一次，隔离测试库计数为 2；统计失败不显示 0，人数页受保护 | API/MySQL |
 | AC-12 | 手机无横向溢出，按钮可操作；地名正确、只有照片方式；所有进度为真实数据 | 浏览器截图 |
 | AC-13 | 两种入口可触发同一工作流；下载镜像的 SHA/平台与部署版本一致；单应用容器复用宝塔 MySQL；重启/更新不丢数据；生产禁用模拟、凭据不入镜像或 Git | Actions + 部署/代码检查 |
-| AC-14 | 每处生产码、游客领取码走正确流程；真实纸样和两种手机实际可扫 | 样张 + 微信真机 |
+| AC-14 | 五处原载荷不变，微信直扫与页内扫都到正确地点且保存照片才完成；游客领取码仍匿名派发；更新说明、真实纸样与 iOS/Android 均实测 | 样张 + 微信真机 |
+| AC-15 | 本人凭证按配置 N 张真实服务器照片、完整大图/重试、单张原地编辑与取消；活动开启、未领取的已有记录才允许替换且无需复扫；匿名派发不具照片权限；编辑期间二维码/本人确认锁定 | API + 浏览器 + 新增微信真机 |
+| AC-16 | 只更新原行照片/版本；同ID恢复、版本冲突、确定失败/COMMIT不明文件安全、self/staff领取锁顺序、图片字节/迟到响应隔离、幂等旧库升级及重启恢复 | MySQL + 浏览器 + 迁移专项 |
+
+新增照片能力单独验收：N 张本人服务器照片/大图/失败重试、用户隔离与匿名边界；已有记录无须复扫替换、首次 POST 门禁/重试保护；2/N 与 N/N 替换的记录/时间/人数不变；取消/解码/文件/SQL失败保留旧图；同版本并发、同ID重试/冲突、响应丢失/连续核对失败/COMMIT不明；两路领取先后竞争；版本字节一致、迟到响应/返回/切用户及blob释放；空库/旧库/重复迁移/旧图首替/重启；320/390/430凭证列表/编辑/错误/未知/成功/只读/缺图/own-voucher-after-last。模拟不计新增微信真机结果。
 
 用两个不同微信身份完成全流程，分别验证游客确认与扫码派发。生产数据验收只核对增量，不清空真实数据以凑测试人数。所有实际结果集中记入 TASKS，不凭文档或模拟结果勾选真机通过。
 
 ## 资料来源与核验边界
 
-业务部分沿用 PRD v1.3；v1.4 补充用户已确认的双入口开发、Actions 构建和宝塔单容器发布方式。本轮已核对 GitHub/Docker 的相关官方资料，入口见 [DEPLOY](DEPLOY.md)；**未核验实际公众号权限、服务器版本或执行构建**。以下微信等资料为沿用入口，不表示已经接入成功：
+业务范围沿用 PRD v1.3；双入口开发、单容器发布与二维码印前约定按用户确认执行。实际检查与运行结果只记 TASKS；官方协议说明不证明实际公众号权限、服务器配置或微信闭环已通过。资料入口如下：
 
-- 微信网页授权：[官方文档入口](https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/Wechat_webpage_authorization.html)。
-- 微信 JS-SDK：[官方文档入口](https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/JS-SDK.html)。
+- 微信网页授权：[官方文档入口](https://developers.weixin.qq.com/doc/service/guide/h5/auth.html)。
+- 微信 JS-SDK：[官方文档入口](https://developers.weixin.qq.com/doc/service/guide/h5/jssdk.html)。
 - 会话中间件：[Express session 文档](https://expressjs.com/en/resources/middleware/session/)。
 - 原生文件选择：[MDN file input](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file)。
 - 条件更新：[MySQL UPDATE 文档](https://dev.mysql.com/doc/refman/8.4/en/update.html)。

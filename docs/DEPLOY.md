@@ -1,6 +1,6 @@
 # DEPLOY · 两种开发入口，共用 Actions 构建与本地部署
 
-**v1.4 · 2026-09-21 · A6.1 工作流已实现并完成一次测试运行，尚未部署**
+**v1.4 · 发布与微信联调操作约定；实际状态只记 TASKS**
 
 业务与验收以 [SPEC](SPEC.md) 为准，进度只写 [TASKS](TASKS.md)。本文件不增加后台、库存或运维平台。
 
@@ -16,7 +16,7 @@
 
 通过已授权 GitHub 工具读最新代码并提交 → 请求同一个 Actions 工作流 → 回读检查与产物结果 → 将具体版本交给本地 Agent → 本地下载、SSH 上传、加载和更新。
 
-网页端有可用 dispatch 接口时直接手动触发；没有时使用下节的构建请求文件。不能把“有 GitHub 写权限”说成“所有 Actions/SSH 操作都能执行”。2026-09-21 本轮发现的 GitHub 连接可读写文件、读取运行及产物，但未暴露发起新 workflow_dispatch 的接口；因此保留文件触发路径，不要求用户为了网页开发必装额外插件。
+网页端有可用 dispatch 接口时直接手动触发；没有时使用下节的构建请求文件。不能把“有 GitHub 写权限”说成“所有 Actions/SSH 操作都能执行”。不同连接是否暴露 workflow_dispatch 以当次工具为准；保留文件触发路径，不要求为了网页开发必装额外插件。
 
 网页端不必先把大镜像下载进聊天沙箱再交给电脑；默认直接交 run ID 和 artifact 名称，由本地取同一产物。能实际下载时可以辅助，但不能声称文件已在用户电脑上。没有执行环境的检查交给 Actions 或本地端，未执行的测试如实标记。
 
@@ -30,7 +30,7 @@
 
 ## 3. 一个工作流，两个按需触发入口
 
-A6.1 已实现 `.github/workflows/build-image.yml`，名称为 `Build application image`，只有一套检查和镜像导出步骤。触发约定如下；既有 `workflow_dispatch` run 已验证构建步骤，本轮未创建请求文件或重复运行 workflow：[G1][G2]
+A6.1 已实现 `.github/workflows/build-image.yml`，名称为 `Build application image`，只有一套检查和镜像导出步骤。触发约定如下，实际运行和产物状态只记 TASKS：[G1][G2]
 
 ```yaml
 on:
@@ -45,7 +45,7 @@ on:
 
 **文件入口：**网页端代码就绪且本次已获构建授权后，只更新 `.github/build-request.txt` 为一行新的请求标识，例如 `2026-09-21-request-01`，随明确的 `build: request image` 提交进入 main。每次实际请求用新值，文件不是脚本，不携带密钥，也不指定要偷偷切换的另一份源码。这个小提交本身的 HEAD 就是要检出、测试、打包的版本；镜像 SHA 不是它的父提交。保护规则要求 PR 时按规则处理，不绕过。[G2]
 
-普通代码、文档修改不更改请求文件；同一次请求选一种触发方式，不先改文件又手动 dispatch。请求文件只由用户授权的开发端更新，不让工作流回写以形成循环。首次用两条路径各试通一次；连接权限、事件或 Actions 配额受阻时记录实际失败，不反复改工作流碰运气。本轮只改文档，不创建该请求文件，也不触发构建。
+普通代码、文档修改不更改请求文件；同一次请求选一种触发方式，不先改文件又手动 dispatch。请求文件只由用户授权的开发端更新，不让工作流回写以形成循环。首次用两条路径各试通一次；连接权限、事件或 Actions 配额受阻时记录实际失败，不反复改工作流碰运气。没有明确构建授权时，不创建或修改该请求文件，也不触发构建。
 
 ## 4. 构建和产物最小合同
 
@@ -110,11 +110,60 @@ docker compose --env-file .env.runtime -f compose.yaml logs --tail=100 app
 
 检查页面/API、日志、数据库连接及旧照片和进度；微信授权、页内扫码和真实相册由真机另验。容器运行不等于微信业务通过；运行失败记录原因，保留原数据。需要回退时将 APP_IMAGE 改回保留的上一版并更新 app，不恢复旧游客数据库、不删除数据卷。只需保留当前/上一版镜像并观察磁盘，不做自动清理平台或零停机集群。
 
-## 7. 授权与当前状态
+### 照片版本增量升级与回退
+
+包含照片替换能力的源码需要 `checkins.photo_revision`。`npm run db:schema` 先执行建表兼容脚本，再调用 `db/migrations/001-photo-revision.mjs`：查询 information_schema；缺列时仅添加 `VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'initial'`；存在时验证定义，不改行、不重置已替换的 UUID。旧照片、checkin id/created_at、用户及领取记录保持。迁移账号需要 ALTER；缺权限或定义冲突即停止，不通过清库重建解决。
+
+Dockerfile 的 `COPY db` 同时带入 `db/migrations/`，运行镜像的 `scripts/apply-schema.mjs` 可直接导入它。生产启动本身不自动迁移。本轮仅准备/本地测试，不执行生产迁移、不沿用之前发布授权。
+
+获本次发布/迁移授权后，先备份数据库与持久照片，核对目标库和镜像版本；加载同一 artifact、将 APP_IMAGE 指向待发布镜像后，在启动新版 app **之前**执行以下一次性命令（不是在旧容器里跑旧脚本）：
+
+```bash
+docker compose --env-file .env.runtime -f compose.yaml run --rm --no-deps --pull never app npm run db:schema
+# 仅迁移成功才更新 app；服务仍使用原持久照片挂载和宝塔 MySQL。
+docker compose --env-file .env.runtime -f compose.yaml up -d --no-build --pull never app
+```
+
+该 ADD COLUMN 可能等待数据库元数据锁，安排已授权的维护窗口并观察实际退出状态；不要将超时直接当作未执行，重试前检查列定义。可重复运行，但不增加版本账本或历史照片表。升级失败保持旧 app；回退只改 APP_IMAGE，保留 photo_revision 兼容字段以及全部游客的新旧记录，不用旧备份覆盖新数据。旧版本应用不提供显式替换，但可继续读现有路径。
+
+日志中的旧文件清理待办只在数据库引用已经核实后人工处理；COMMIT 结果未知时保留可能有效的新旧文件，不按文件日期批量删除。只记录随机文件 basename，不输出游客照片、Cookie 或连接凭据。
+
+## 7. 授权边界
 
 用户准备给本地 Agent 服务器连接权限；连接可用性以实际 SSH 配置和成功读取为准。明确发布任务与目标后，在该授权范围内连续完成下载、上传、加载、更新和检查，不逐条重复请求确认。单纯开发/改文档/请求构建不视为允许修改生产；公众号菜单、其他消息服务、删除数据另行确认。
 
-2026-09-21 既有 run `35587927134` / attempt `1` 的检查、镜像构建和元数据导出成功，但 artifact 上传因仓库存储配额已满失败。本轮未删除其他项目产物、调整付费设置或重复触发构建；没有连接服务器。服务器架构与生产条件仍未实测。后续事实都记在 TASKS，不在本文件累积重复运行日志。
+历史运行、artifact 配额、服务器检查与实际授权范围只记 TASKS，不在本文件累积重复状态。额度未知时不能宣称已恢复，不能删除其他项目产物、调整付费或忽略上传失败来完成交付。地点二维码纸样导出独立于 Actions artifact。
+
+## 8. 正式入口与微信联调核对
+
+正式 origin 是 `https://cq.fsxinhuo.cn`。以下仅为非敏感生产约定，不是完整可直接启动的环境文件，不覆盖服务器已有 `.env.runtime` 或电脑 `.env`：
+
+```dotenv
+PUBLIC_ORIGIN=https://cq.fsxinhuo.cn
+NODE_ENV=production
+DEV_MOCK_ENABLED=false
+UPLOAD_DIR=/var/lib/changqi/uploads
+```
+
+菜单计划地址为 `https://cq.fsxinhuo.cn/`；OAuth 固定回调为 `https://cq.fsxinhuo.cn/auth/callback`。保持 `/q/p01`～`/q/p05` 地点码路径，游客视图 `/#claim` 与持码派发 `/r/:claimCode` 不互换。运行代码按环境读取 PUBLIC_ORIGIN，不把最终域名硬编码为所有环境默认值。
+
+公众号负责人按当时官方后台核对“印象芦苞”的网页授权与 JS-SDK/scanQRCode 实际权限。网页授权域名与 JS 接口安全域名按后台要求配置为 `cq.fsxinhuo.cn`；填域名而非带协议和回调路径的 URL。后台要求时再核对业务域名、平台提供的校验文件与真实应用服务器出口 IP 白名单，不把电脑网络出口或解析 IP 当成应用出口。公众号若已有第三方托管，先确认凭据/票据管理方式，不重置 AppSecret、不开关消息服务器、不改已有托管和菜单。[W1][W2]
+
+只在已授权运行环境核对微信凭据、SESSION_SECRET、数据库及统计凭据是否完整，不输出密钥、Cookie、OpenID、完整连接串或环境文件。网页授权采用 snsapi_base，页面扫描使用 needResult:1；这些代码约定或官方说明均不证明该公众号已具备权限。[W1][W2]
+
+服务器只读核对须区分四层：公网 DNS；证书域名/有效期/信任链；当前 `/`、`/api/activity` 与五条 `/q/` 确实属于本项目；运行镜像/source SHA 与验收代码一致。默认欢迎页或单纯 200 不等于部署成功。只读探测不调用上传、领取写接口，也不访问任意游客凭证。
+
+已获服务器权限后，核对 MySQL 连接及容器到宿主机地址、会话持久化、Secure/HttpOnly/SameSite Cookie、Nginx 原始协议转发、HTTP→HTTPS、路径不被错误重写、应用回环端口、15 MiB 上传余量和照片持久挂载的写权限。只报告是否正确，不打印凭据；没有可用 SSH 时写未核验，不因提供域名而自行安装、重启或部署。
+
+域名未运行可用项目时，A5 本地回归和 A6.3 最终地址纸样仍可完成；A6.1 构建与 A6.2 首次联调部署在取得对应授权后衔接，不形成相互等待。没有正式库测试写入授权，不新增游客照片或标记领取。纸样操作及批量印刷条件见 SPEC S10，生成命令见 README。
+
+### 微信地点直达入口（2026-09-23 变更）
+
+正式 origin、固定回调和五条 `/q/` 载荷不变，不更换 AppID/AppSecret，不重置或迁移数据库。微信内有效 `/q/` 重新 snsapi_base 识别当前用户一次，回调保存会话/有效地点后直接到 `/#point/:key`；外部游客首页/地点入口只提示微信打开，不依赖数据库，不影响匿名 `/r/`、API、静态资源或 `/stats` 固定凭据。不能缓存 `/q/`、授权和本人状态，按环境分流返回 Vary: User-Agent；静态图片缓存不受影响。
+
+游客说明：使用微信扫一扫现场地点二维码，打开页面并上传现场照片。也可从‘印象芦苞’公众号进入活动，使用页面内扫一扫。旧纸样包/码图保留，仅更正外围说明；不得写扫码即完成或要求重印码图。
+
+本轮入口代码默认仅本地实现/测试/提交，不沿用旧发布授权替换线上。获本次发布授权后按同一云构建/SSH 流程更新并回读镜像 SHA，保护环境、游客记录、照片。随后用 iOS/Android 微信验证首次直扫、原菜单用户换入口、重进/会话过期、同设备换账号、已关注/未关注、五处、拍照/相册、复扫与两路领取。公众号权限或真机不足明确待验，不将失败改成强制关注规则；本地 OAuth/SDK 模拟不等于微信通过。
 
 ## 资料入口
 
@@ -126,3 +175,5 @@ docker compose --env-file .env.runtime -f compose.yaml logs --tail=100 app
 - [D1 Docker：通过 Actions artifact 传递镜像](https://docs.docker.com/build/ci/github-actions/share-image-jobs/)
 - [D2 Docker：load 导入归档](https://docs.docker.com/reference/cli/docker/image/load/)
 - [D3 Docker：Compose 更新服务](https://docs.docker.com/reference/cli/docker/compose/up/)
+- [W1 微信：网页授权](https://developers.weixin.qq.com/doc/service/guide/h5/auth.html)
+- [W2 微信：JS-SDK 使用说明](https://developers.weixin.qq.com/doc/service/guide/h5/jssdk.html)

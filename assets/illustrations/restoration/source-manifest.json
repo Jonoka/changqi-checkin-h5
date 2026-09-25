@@ -1,0 +1,119 @@
+{
+  "source": "assets/illustrations/restoration/recipe.json",
+  "sourceSha256": "3340f460c09eb13b4202113468f03b52ee478c8dbd6a7b1918704716a1ff8485",
+  "method": "Native-pixel PNG crops only; no painting, interpolation, UI removal or runtime adoption. See TASKS for review.",
+  "files": [
+    {
+      "path": "assets/illustrations/restoration/sources/map-scene.png",
+      "width": 739,
+      "height": 653,
+      "reference": "assets/reference/map.png",
+      "referenceSha256": "e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078",
+      "crop": {
+        "left": 100,
+        "top": 503,
+        "width": 739,
+        "height": 653
+      },
+      "use": "Map editing input only: labels, numerals, signs and coloured status trail remain; not a clean master.",
+      "bytes": 1353479,
+      "sha256": "d5661561ade790ebf3aac855e37de5a720626adadf3d14d70f3d0039ff09184d"
+    },
+    {
+      "path": "assets/illustrations/restoration/sources/well-scene.png",
+      "width": 307,
+      "height": 302,
+      "reference": "assets/reference/checkin.png",
+      "referenceSha256": "60ebb1b73288cd044fc4c8958b63d87909280828f2dde5ca3180502a1e045e63",
+      "crop": {
+        "left": 528,
+        "top": 348,
+        "width": 307,
+        "height": 302
+      },
+      "use": "p03 editing input: roof edges, plaque and a small foreground person fragment need repair; insufficient detail resolution.",
+      "bytes": 266587,
+      "sha256": "f85704a5266293df279147e43d31f75f7c9f94becd48a649d78c3ce7eb282495"
+    },
+    {
+      "path": "assets/illustrations/restoration/sources/well-stone-fragment.png",
+      "width": 266,
+      "height": 168,
+      "reference": "assets/reference/checkin.png",
+      "referenceSha256": "60ebb1b73288cd044fc4c8958b63d87909280828f2dde5ca3180502a1e045e63",
+      "crop": {
+        "left": 566,
+        "top": 478,
+        "width": 266,
+        "height": 168
+      },
+      "use": "Native text-free well/courtyard fragment. Roof deliberately excluded; detail/texture reference only, not a complete landmark hero.",
+      "bytes": 128853,
+      "sha256": "f5e2bc763bf181737484a7fc8df4e08cc050e044d780abdf15c14787c2c30576"
+    },
+    {
+      "path": "assets/illustrations/restoration/sources/gourd-scene.png",
+      "width": 229,
+      "height": 236,
+      "reference": "assets/reference/map.png",
+      "referenceSha256": "e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078",
+      "crop": {
+        "left": 100,
+        "top": 503,
+        "width": 229,
+        "height": 236
+      },
+      "use": "p01 editing input: retain the original gourd ornament; remove label and stone lettering. No cartoon character.",
+      "bytes": 154909,
+      "sha256": "bac86f006667bdb756b4c86d97fc716528248f4f577d13c29eb9acb809c6e5a2"
+    },
+    {
+      "path": "assets/illustrations/restoration/sources/hall-scene.png",
+      "width": 330,
+      "height": 252,
+      "reference": "assets/reference/map.png",
+      "referenceSha256": "e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078",
+      "crop": {
+        "left": 509,
+        "top": 503,
+        "width": 330,
+        "height": 252
+      },
+      "use": "p02 editing input: original hall, wok-ear roof and facade; tags and plaque/couplet lettering need local repair.",
+      "bytes": 228883,
+      "sha256": "0db9d0ada679656db237f4dce18d961941e02ca1acc8d82cd3b3b9d445ac7246"
+    },
+    {
+      "path": "assets/illustrations/restoration/sources/banyan-scene.png",
+      "width": 252,
+      "height": 274,
+      "reference": "assets/reference/map.png",
+      "referenceSha256": "e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078",
+      "crop": {
+        "left": 486,
+        "top": 794,
+        "width": 252,
+        "height": 274
+      },
+      "use": "p04 editing input: preserve original trunk/aerial roots; tag, coloured trail and edge obstructions remain.",
+      "bytes": 192062,
+      "sha256": "fb5a1907a1c6e1cc25e7bb6845db71b420975da4602b168115e8cfd25b4da93f"
+    },
+    {
+      "path": "assets/illustrations/restoration/sources/summit-scene.png",
+      "width": 425,
+      "height": 241,
+      "reference": "assets/reference/map.png",
+      "referenceSha256": "e9a88e5452aeabde7bf90b72f742643e3a388c652cb4ae57e267d51002a6e078",
+      "crop": {
+        "left": 100,
+        "top": 903,
+        "width": 425,
+        "height": 241
+      },
+      "use": "p05 editing input: overlook, village and forest; remove pin and stone writing, do not add a summit building.",
+      "bytes": 289936,
+      "sha256": "cfe5f2597619d1e0436eaa3d80a15227f0fad61b7ae0338ba921c842bd42ae05"
+    }
+  ]
+}

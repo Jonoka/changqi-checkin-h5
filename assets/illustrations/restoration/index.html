@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>长岐原图裁切核对 · 非换图验收</title>
+<style>body{margin:0;padding:24px;font:16px/1.7 system-ui,sans-serif;color:#243d30;background:#f5f3e9}main{max-width:1300px;margin:auto}h1,h2{line-height:1.35}p{max-width:90ch}code{overflow-wrap:anywhere}article{padding:20px;background:white;border:1px solid #d4d9cb;border-radius:12px;margin:24px 0}.compare{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,2fr) minmax(180px,1fr);gap:20px;align-items:start}figure{margin:0}img{display:block;max-width:100%;height:auto;max-height:650px;object-fit:contain;object-position:top left}figcaption{font-size:14px;margin-top:10px}.pending{padding:16px;border:2px dashed #c09f69;background:#fff9ed}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px}.meta{font-size:14px;color:#526657}a{color:#245e42}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;text-align:left;padding:10px;vertical-align:top}@media(max-width:700px){body{padding:12px}.compare{grid-template-columns:1fr}.compare img{max-height:500px}}</style>
+<main><h1>原参考图 → 原生裁切输入</h1>
+<p class="pending"><strong>历史裁图检查页，不是当前换图效果。</strong>下列原生裁图保留其当时的缺项说明，未作为当前插画使用。另行提供的六张独立 PNG 见 <a href="masters/index.html">母版核对页</a>；来源见 <a href="masters-import-manifest.json">导入清单</a>。实际接入、页面截图与验收状态仅以 <a href="../../../docs/TASKS.md">TASKS</a> 为准。</p>
+<p class="meta">代码审阅起点：bf2d7345024b27c8a64afbb1571e100c3a43ee01。裁切矩形采用原图左上角为 (0,0) 的像素坐标；所有原图为 941×1672。<a href="recipe.json">裁切与母版约定</a> · <a href="source-manifest.json">实际输出尺寸、字节与 SHA-256</a>。图片可点击原尺寸查看。</p>
+<article><h2>第一关：纯地图底图</h2><div class="compare">
+<figure><a href="../../reference/map.png"><img src="../../reference/map.png" alt="仓库 map.png 原始手机效果图"></a><figcaption>原参考图 map.png；未修改。</figcaption></figure>
+<figure><a href="sources/map-scene.png"><img src="sources/map-scene.png" alt="地图场景原生裁切，仍含界面标签"></a><figcaption>裁切 (100,503,739,653)，739×653 px。五处地标完整构图可用，但编号、地名卡、已完成/前往此处、绿色/橙色路线、口号与牌匾文字仍在，右下有人物遮挡。<strong>不是无 UI 底图。</strong></figcaption></figure>
+<div class="pending"><strong>无 UI 母版：未完成</strong><p>保持本裁图比例与地标位置，逐处修补标签/错字/遮挡，将路线整理为中性实际步道。最低保留 739×653 有效像素；不要套用旧 720×1240。</p><p><strong>实际页面：未换图</strong><br>素材关通过后才调整图片容器、五个 key 锚点与 HTML 状态按钮。</p></div>
+</div></article>
+<article><h2>第一关：p03 沉香古井详情</h2><div class="compare">
+<figure><a href="../../reference/checkin.png"><img src="../../reference/checkin.png" alt="仓库 checkin.png 原始手机效果图"></a><figcaption>原参考图 checkin.png；大场景，不采用小缩略图拉伸。</figcaption></figure>
+<figure><a href="sources/well-scene.png"><img src="sources/well-scene.png" alt="古井棚亭原生裁切，牌匾文字尚未清理"></a><figcaption>裁切 (528,348,307,302)，307×302 px。保留井口、石井沿和原棚亭。牌匾需去字，屋檐缺边、左下人物边缘需修补；此原生尺寸不足以称作高清详情图。</figcaption>
+<a href="sources/well-stone-fragment.png"><img src="sources/well-stone-fragment.png" alt="不含文字的井身和石地局部"></a><figcaption>安全片段：(566,478,266,168)，266×168 px，无文字；只作井身与地面细节参考，缺屋顶，不能冒充完整详情母版。</figcaption></figure>
+<div class="pending"><strong>无 UI 完整详情母版：未完成</strong><p>以已提取棚亭/古井为编辑对象，保留建筑身份并局部补边；建议 768×512，必须有真实修补/扩图，不将插值变大当成高清。</p><p><strong>实际页面：未换图</strong><br>上传区、现有 hash 视图、CQ 显示范围和身份/扫码逻辑保持原样。</p></div>
+</div></article>
+<article><h2>其余四处：仅定位原图来源，未提前标记完成</h2><div class="grid">
+<figure><a href="sources/gourd-scene.png"><img src="sources/gourd-scene.png" alt="p01 葫芦主题原生编辑输入"></a><figcaption><strong>p01 葫芦娃</strong> · map.png<br>(100,503,229,236)，229×236。沿用金色葫芦装置，不添加动画人物。标签与石刻未清理；后续建议 640×480 来源一致的母版。</figcaption></figure>
+<figure><a href="sources/hall-scene.png"><img src="sources/hall-scene.png" alt="p02 岭南祠堂原生编辑输入"></a><figcaption><strong>p02 卢氏大宗祠</strong> · map.png<br>(509,503,330,252)，330×252。保留镬耳式屋顶、原立面；标签和牌匾/对联字形未清理，后续建议 768×512。</figcaption></figure>
+<figure><a href="sources/banyan-scene.png"><img src="sources/banyan-scene.png" alt="p04 榕树原生编辑输入"></a><figcaption><strong>p04 苞榕</strong> · map.png<br>(486,794,252,274)，252×274。保留枝干、树皮、气根；标签/状态路径和边缘遮挡未清理，后续建议 640×480。正确地名来自配置。</figcaption></figure>
+<figure><a href="sources/summit-scene.png"><img src="sources/summit-scene.png" alt="p05 山顶眺望原生编辑输入"></a><figcaption><strong>p05 文笔山顶</strong> · map.png<br>(100,903,425,241)，425×241。取既有观景台、村落和山林；编号/石刻未清理，后续建议 768×512，不新增山顶建筑。</figcaption></figure>
+</div></article>
+<p>先完成并目视核对“地图＋古井”两张，再继续其他四处和页面接入。其余参考：<a href="../../reference/home.png">home.png</a> · <a href="../../reference/success.png">success.png</a> · <a href="../../reference/claim.png">claim.png</a>。claim 底部缩略图只核对形象，不作放大母版。无需重新提交仓库已有原图。</p>
+</main></html>

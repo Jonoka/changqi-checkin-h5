@@ -5,7 +5,8 @@ import { loadActivityConfig } from '../server/config.js'
 
 const app = createApp({
   activityConfig: loadActivityConfig(),
-  pool: { query: async () => { throw new Error('test database failure') } }
+  pool: { query: async () => { throw new Error('test database failure') } },
+  wechatClient: { jsConfig: async (pageUrl) => ({ pageUrl, jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData'] }) }
 })
 const server = http.createServer(app)
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -22,10 +23,32 @@ try {
   assert.equal(activity.response.status, 200)
   assert.equal(activity.payload.ok, true)
 
+  const shareConfig = await jsonResponse(`/api/wechat/js-config?url=${encodeURIComponent(`${baseUrl}/r/0123456789abcdef0123456789abcdef`)}`)
+  assert.equal(shareConfig.response.status, 200)
+  assert.deepEqual(shareConfig.payload.data.jsApiList, ['updateAppMessageShareData', 'updateTimelineShareData'])
+
   const page = await fetch(`${baseUrl}/`)
   assert.equal(page.status, 200)
   const pageBody = await page.text()
   assert.match(pageBody, /<!doctype html>|Frontend is not built/i)
+
+  for (const cookie of ['', 'changqi.sid=old-untrusted-cookie']) {
+    const guide = await fetch(`${baseUrl}/q/p03`, { headers: { cookie }, redirect: 'manual' })
+    assert.equal(guide.status, 200, 'external guide works with an unavailable database')
+    assert.match(await guide.text(), /请在微信内打开活动/)
+    assert.equal(guide.headers.get('set-cookie'), null)
+    assert.match(guide.headers.get('vary'), /User-Agent/i)
+  }
+  const unavailable = await fetch(`${baseUrl}/q/p03`, { headers: { 'user-agent': 'MicroMessenger SIMULATED' }, redirect: 'manual' })
+  assert.equal(unavailable.status, 503)
+  assert.equal(unavailable.headers.get('location'), null)
+  assert.match(await unavailable.text(), /href="\/q\/p03"/)
+  for (const route of ['/q/invalid', '/q', '/q/p03/extra']) {
+    const invalidPoint = await fetch(`${baseUrl}${route}`, { headers: { 'user-agent': 'MicroMessenger SIMULATED', cookie: 'changqi.sid=old-cookie' }, redirect: 'manual' })
+    assert.equal(invalidPoint.status, 404)
+    assert.equal(invalidPoint.headers.get('location'), null)
+    assert.match(await invalidPoint.text(), /INVALID_POINT/)
+  }
 
   const unknown = await jsonResponse('/api/does-not-exist')
   assert.equal(unknown.response.status, 404)
@@ -42,7 +65,7 @@ try {
   const health = await jsonResponse('/health')
   assert.equal(health.response.status, 503)
   assert.deepEqual(health.payload, { ok: false, error: { code: 'DB_UNAVAILABLE', message: 'Database is unavailable' } })
-  console.log('http checks ok: page, activity API, API 404, invalid JSON, database error')
+  console.log('http checks ok: page, activity API, external guide without DB, invalid point, unavailable identity retry, API 404, invalid JSON, database error')
 } finally {
   await new Promise((resolve) => server.close(resolve))
 }
