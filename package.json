@@ -9,12 +9,14 @@
   "scripts": {
     "dev": "vite --config web/vite.config.js",
     "start": "node server/index.js",
-    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs && node --test scripts/a1-unit.test.mjs scripts/a2-unit.test.mjs scripts/a3-unit.test.mjs scripts/a4-unit.test.mjs scripts/a4-image-art.test.mjs scripts/point-qrs.test.mjs scripts/ui-polish.test.mjs scripts/photo-replacement.test.mjs",
+    "check": "node scripts/check-config.mjs && node scripts/check-http.mjs && node --test scripts/a1-unit.test.mjs scripts/a2-unit.test.mjs scripts/a3-unit.test.mjs scripts/a4-unit.test.mjs scripts/a4-image-art.test.mjs scripts/point-qrs.test.mjs scripts/ui-polish.test.mjs scripts/photo-replacement.test.mjs scripts/activity-reports.test.mjs",
     "test:a1:mysql": "node scripts/check-a1-mysql.mjs",
     "test:a2:mysql": "node scripts/check-a1-mysql.mjs --a2",
     "test:a3:mysql": "node scripts/check-a1-mysql.mjs --a3",
     "test:a4:mysql": "node scripts/check-a1-mysql.mjs --a4",
     "qr:points": "node scripts/generate-point-qrs.mjs",
+    "export:activity": "node scripts/export-activity.mjs",
+    "test:export:mysql": "node scripts/check-export-mysql.mjs",
     "db:schema": "node scripts/apply-schema.mjs",
     "build": "vite build --config web/vite.config.js"
   },
