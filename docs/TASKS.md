@@ -6,6 +6,16 @@
 
 ## 0. 当前真实状态
 
+### 2026-09-28 · PR #2 合并版本部署（生产检查通过）
+
+远端 PR #2「只读统计扩展、CSV 报表与受控照片导出」已合并；合并提交 `159600189e8859780b4dc9e8b2f50fce043dfaac`，原 PR head `dc57b9b25d82d108df212a4235e85056a1895e74`。Windows 工作区已从 `7885c4e62da0d771c1d400cfdaa7caf7de5b3a44` 安全 fast-forward 到该 `main` 提交，未 reset/clean，未覆盖忽略文件。
+
+Actions run `36367328361` / attempt 1 在该 `main` SHA 上成功完成配置检查、前端构建、linux/amd64 镜像构建、临时 MySQL schema/应用冒烟、导出和 artifact 上传。artifact `changqi-image-159600189e88-36367328361-1` 未过期；下载目录 `tmp/release-36367328361`，镜像归档 SHA-256 `b0af134d794296059bdadce1fe54e108393279a3eb885eed3d31b7ac01a2250d` 与 sidecar 一致。`build-info.json` 确认 source SHA、run ID/attempt、`linux/amd64`、Node `v24.21.0`、npm `11.19.0` 和镜像 `changqi-checkin-h5:159600189e88-36367328361-1`。
+
+服务器预检确认 x86_64、Docker 26.1.3、Compose v2.27.0、原容器健康、`.env.runtime` 为 root 600、`network_mode: bridge`、`127.0.0.1:3002` 和必要密钥存在；未输出密钥值。发布文件上传至 `/opt/changqi-checkin-h5/releases/36367328361`，校验通过后加载镜像 ID `sha256:0bef38a3230c06bc56e89c4c830b11c6a728a3f6dbe31ca899360c92b7d6e171`。回滚备份为 `/opt/changqi-checkin-h5/backups/.env.runtime.before-36367328361`、`compose.before-36367328361.yaml`、`cq.fsxinhuo.cn.conf.before-36367328361` 和 `image.before-36367328361.txt`；旧镜像保留。持久照片目录、生产数据库、Nginx、公众号菜单、DNS、证书及其他站点未修改。
+
+同一新镜像幂等 `npm run db:schema` 成功显示项目 3 表，随后仅重建 app 容器。服务器回环与 Windows 外部 HTTPS 均通过：`/health` 200/database connected、`/api/activity` 活动名与五点、`/q/p01` 200、v2 WebP 200 image/webp、未登录 `/api/me` JSON 401、无效领取码 JSON 404、`/stats` 401、HTTP→HTTPS 301；`nginx -t` 通过。容器重启后仍为上述 tag/镜像 ID、bridge、回环端口且数据库健康。未调用生产上传、领取、统计写入或照片导出路径；PR #2 的只读统计、CSV/照片导出能力仍需按授权的实际负责人导出流程另行验收。
+
 ### 2026-09-25 · 只读统计、CSV 与受控照片导出（本地验证通过，Draft PR #2；未部署）
 
 已核对 PR #1 实际 merged/closed、合并提交 cd4c18d、已验收 head a399d54；远端/Windows main 同为 `7885c4e62da0d771c1d400cfdaa7caf7de5b3a44`，全量 porcelain 干净，无开放 PR、无同名目标分支。从此 main 新建 `feat/stats-photo-export`，不继续旧分支。按用户新需求最小更新 PRD/SPEC，以下既有发布和真机历史全部保留。本轮仅实现/隔离验证，不连接生产、不发布、不触发 Actions、不改活动配置/地图/分享/正式二维码。
