@@ -44,6 +44,7 @@ export function runtimeConfig(env = process.env) {
   }
   return {
     production, mockEnabled, sessionSecret, uploadDir, statsUser, statsPassword,
+    statsExclusionFile: env.STATS_EXCLUDE_CQ_FILE ?? '',
     publicOrigin: origin.origin,
     secureCookie: origin.protocol === 'https:',
     appId: env.WECHAT_APP_ID || '',

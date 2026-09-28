@@ -6,6 +6,26 @@
 
 ## 0. 当前真实状态
 
+### 2026-09-25 · 只读统计、CSV 与受控照片导出（本地验证通过，Draft PR #2；未部署）
+
+已核对 PR #1 实际 merged/closed、合并提交 cd4c18d、已验收 head a399d54；远端/Windows main 同为 `7885c4e62da0d771c1d400cfdaa7caf7de5b3a44`，全量 porcelain 干净，无开放 PR、无同名目标分支。从此 main 新建 `feat/stats-photo-export`，不继续旧分支。按用户新需求最小更新 PRD/SPEC，以下既有发布和真机历史全部保留。本轮仅实现/隔离验证，不连接生产、不发布、不触发 Actions、不改活动配置/地图/分享/正式二维码。
+
+实现提交 `1eced29756f62cb91daa56a9d6e9ce83bea31fa8` 已由Windows正常提交并推送；新建 [Draft PR #2](https://github.com/Jonoka/changqi-checkin-h5/pull/2)，base/main仍为 `7885c4e62da0d771c1d400cfdaa7caf7de5b3a44`，已回读 open/draft=true/merged=false。此后只补本段交接记录，不改变已验证运行时代码；最终分支HEAD以Git/PR回读为准。没有转Ready、合并或提交构建请求。
+
+实现共享 `activity-reports.js` / `report-csv.js`：唯一服务端配置、精确当前 key、动态非空 N、BIGINT 字符串 CQ，短同 connection 只读一致快照；参与/完成/领取/完成未领取独立按条件计算，缺图不撤销打卡，异常领取只提示。北京时间每日事件先聚合完整记录再分组。可选 `STATS_EXCLUDE_CQ_FILE` 默认空，规范名单失败即报错，只公开启用及匹配数。`/stats` 保留既有样式、固定凭据、手动刷新；三个固定 `/stats/export/{summary,points,daily}.csv` 同样先认证。CSV 为 BOM UTF-8、中文、正确转义/公式防护，网页仅聚合资料。
+
+新增 `npm run export:activity -- --help` / `--out <私有新批次绝对目录> --scope participants [--dry-run]`。另支持 completed/claimed，三个统计CSV始终为活动总览。显式 DB_* / UPLOAD_DIR，不自动加载 .env 或建库/迁移。只复制当前已提交引用，逐张64KiB缓冲，核对前后路径/revision及源文件身份，最多3次；源图消失或同名文件替换也不得凭旧句柄报成功。批次拒绝覆盖、源目录/源码重叠及链接，输出兼容Windows；空间不足、权限、断连、中断分别如实失败。6份CSV、照片和 export-info 保存实际版本/哈希、预期/成功/异常数；退出0完整、2部分、1致命。未新增照片权限、网页相册或压缩服务。源码指纹记录实际文件哈希，提交/镜像标识取不到即说明。
+
+最终实际执行：`npm run check` 配置/HTTP与 **86/86**、`npm run build`、`git diff --check` 全通过；日志 `tmp/stats-export-final-ltpd0B/{check,build}.log`。独立 **MySQL 8.4.9 127.0.0.1:3325**、全新 datadir/UUID 验证、显式 TEST_DB_*、合成JPEG与实际 Chrome 154.0.8037.57：`npm run test:export:mysql` **9/9分组**，`npm run test:a4:mysql` **57/57分组**（已含A1–A3）通过；最终日志 `tmp/mysql-stats-export-3325-FoqRyK/{test-export-mysql,test-a4-mysql}.log`。仅关闭本次隔离实例，测试随机库按原入口清理；历史环境、照片与证据保留。Windows仍为 Node24.12.0/npm11.6.2，未升级运行时/依赖/单一lockfile。
+
+独立固定期望 A仅识别、B2处、C全完成未领取、D全完成已领取得到 **4/3/2/1/1/12**；覆盖空库、零地点人数、可变N、历史/大小写key、跨日/+08边界、排除、超大CQ、异常领取、查询失败和认证下载。真实导出 participants=3人/12图、completed=2人/10图、claimed=1人/5图，原字节/哈希一致，业务行全量摘要未变；替换竞争以第2次取得新版本，起始快照后新增身份不混入，复制期间真实领取21ms提交（仅本次小样本观察）。连续变化3次/缺图/坏路径各为11成功+1异常，完成统计不变。权限/空间/合作式中断另有显式故障注入；源路径消失/重绑定、NTFS junction/硬链接拒绝也实际验证。
+
+最终证据 `tmp/changqi_export_test_9117de59304c/`：`http-{summary,points,daily}.csv`、`cli-dry-run.json`、`export-verification.json`、`stats-screenshots.json`、`stats-review.html`、`stats-390.png`（390×1767）和 `stats-1440.png`（1440×1526）。PNG完整解码、尺寸/哈希与Chrome实际DOM数字、无横向溢出/手动刷新均通过；源码逐文件哈希与本轮最终运行时代码一致，证据如实记录基准HEAD+dirty工作区，不伪称提交后截图。WebCodex图片回传仅取得元数据、原生窗口复核报 stale_surface，本轮不冒称逐图目视已通过；可在本地 stats-review.html 复核。合成批次在 `C:\Users\ADMINI~1\AppData\Local\Temp\changqi-export-synthetic-pwwCJ5\batches`，7批次与6份清单已回读检查；不含生产游客照片，不入Git/Actions/聊天。A4最新证据 `tmp/changqi_a1_test_94faee915ebe/`，只选择本轮stats及必要home/认证恢复状态，不机械重做历史截图。
+
+保留中间失败与修复：最初FileHandle关联流关闭等待超时，改为显式有界读写；Chrome专项选择器引号错误的失败日志 `tmp/mysql-stats-export-3325-YIlTti/` 保留，修复后重新运行；提交前补源路径复核后完整重跑为上述最终结果。旧地图/分享完整标题、首次上传/领取、照片认证恢复、账号隔离和进程重启回归均通过，微信网络/SDK仍是模拟，不称真机通过。
+
+Dockerfile已在构建和运行阶段复制CLI，11个传递本地模块与3个既有生产依赖的静态复制链、实际CLI --help通过；.gitignore/.dockerignore忽略导出资料。package-lock、schema、compose、activity、web与工作流均未变；无新增表/索引/生产ALTER。DEPLOY给出未来指定镜像一次性运行、照片只读/输出单独可写示例。**未执行新镜像构建或容器运行、生产导出/部署、真实系统磁盘耗尽/断电或大规模负载验证**；源码环境专项的进程RSS采样约99MiB，不是部署上限。负责人仍需确认输出父目录不被Web服务公开、Windows ACL/文件系统能力，以及正式收尾停止写入授权；不会自动清理或停活动。
+
 ### 2026-09-25 · main 合并版本同步并发布（生产检查通过，新增真机待验）
 
 Windows 工作区开工 porcelain 干净；远端默认分支 `main` 为 PR #1 合并提交 `cd4c18dde1e26d4820f7fb6787089488b8c5da9b`，包含原 `feat/a1-wechat-scan` head `a399d54fd69715e0460321c5b24b93a89aa18fc2`，无开放 PR。本地 `main` 已从 `cc411965dd384e9608a80abf87a9e883eea8294d` 安全 fast-forward 到该提交，未 reset/clean，也未覆盖忽略文件。

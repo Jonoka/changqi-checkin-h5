@@ -165,6 +165,45 @@ UPLOAD_DIR=/var/lib/changqi/uploads
 
 本轮入口代码默认仅本地实现/测试/提交，不沿用旧发布授权替换线上。获本次发布授权后按同一云构建/SSH 流程更新并回读镜像 SHA，保护环境、游客记录、照片。随后用 iOS/Android 微信验证首次直扫、原菜单用户换入口、重进/会话过期、同设备换账号、已关注/未关注、五处、拍照/相册、复扫与两路领取。公众号权限或真机不足明确待验，不将失败改成强制关注规则；本地 OAuth/SDK 模拟不等于微信通过。
 
+## 一次性只读照片资料导出（未来授权后使用）
+
+本节仅为操作说明，不表示已构建、部署或执行生产导出；实际进度仍只记 TASKS。需使用包含 `scripts/export-activity.mjs` 和 `server/activity-{reports,export}.js`、`server/export-files.js`、`server/report-csv.js` 的经核验指定镜像。旧上线镜像可能不含新工具，不能假定可用。Dockerfile 将入口与共享模块复制至运行阶段；不重建正在运行的 app，不触发导出队列或 Actions。
+
+负责人先确认活动配置/必达key与运行服务一致、照片仅用于内部记录/核查、私有输出父目录的权限和剩余空间。活动进行中允许只读导出，但统计/选人是起始快照，照片可能是稍后版本；正式收尾包优先另行授权停止写入并等在途请求完成，**本脚本不停止活动或重启服务**。
+
+准备只用于导出的私有环境文件（权限0600，Windows需核验ACL），显式包含 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`UPLOAD_DIR=/var/lib/changqi/uploads`。不需 STATS 密码、微信密钥或 Session 密钥。可由负责人预先提供 SELECT 权限账号；工具不会自行创建账号、改授权、迁移或回填。未提供数据库字段立即失败，不自动加载应用 `.env`。不要把密钥写在命令行、截图或版本库里。
+
+默认不排除任何用户。启用排除时，环境同时指定 `STATS_EXCLUDE_CQ_FILE=/run/private/confirmed-cqs.json`，把网页使用的**同一份**负责人确认 JSON CQ 名单只读挂载到该路径。文件不存在、不可读、非规范/重复编号均报错，不允许临时取消配置凑出报表；客户端资料包仅记录启用状态和匹配人数，不含完整名单。
+
+以下示例假设 Linux 宿主机回环可访问 MySQL；其他拓扑须使用已核验的数据库网络/DB_HOST，不能照抄或改正在运行 app 的网络。`/srv/private-exports` 必须由负责人预先设置为非公开私有目录（例如0700）；不放入源码、Nginx公开根、源uploads或备份共享目录。输出使用NTFS/ext4等支持同目录硬链接的文件系统，以不覆盖方式提交每张照片。Windows上的0700不是ACL保证，负责人需核验私有访问权限。
+
+```sh
+# 仅示例：填入负责人核验、包含本轮CLI的镜像标签/ID；不使用 latest。
+EXPORT_IMAGE='changqi-checkin-h5:<经核验的镜像标识>'
+# 先预检；不会创建 /exports/活动导出-新批次。
+docker run --rm --pull never --read-only --network host \
+  --env-file /etc/changqi/export.env \
+  --mount type=bind,src=/srv/changqi/uploads,dst=/var/lib/changqi/uploads,readonly \
+  --mount type=bind,src=/srv/private-exports,dst=/exports \
+  "$EXPORT_IMAGE" node scripts/export-activity.mjs \
+  --out /exports/活动导出-新批次 --scope participants --dry-run
+# 核对人数/记录/可读性/预估空间后，去掉 --dry-run 正式运行；批次仍须不存在。
+```
+
+启用名单时还需添加 `--mount type=bind,src=/etc/changqi/confirmed-cqs.json,dst=/run/private/confirmed-cqs.json,readonly`，环境路径与挂载一致。照片挂载必须只读，只有独立输出挂载可写；无需 `docker compose up`、重建或重启现有app。没有暂停写入权限时只说明包的时间一致性限制，不自动改变活动开关。
+
+资料包含6份中文CSV（统计汇总、地点统计、每日统计、游客进度、照片清单、异常清单）、`export-info.json` 和 `photos/CQ.../key-名称.jpg`。三个聚合CSV均为排除规则下的全活动总览；scope participants/completed/claimed 只筛选逐游客资料。CSV为BOM UTF-8，前面是活动/规则/时间/时区/排除元数据，空行后才是报表表头；CQ为文本、数量为数值、公式起始文本加单引号防护。
+
+验收时核对：`expectedFiles = successfulFiles + exceptionalFiles`，`status=complete` 且 `complete=true` 才是完整包；退出码0完整，2部分照片或业务异常，1致命失败。缺图/非法路径/持续替换都有异常项；断连、写盘失败或合作式中断终止后尽力落清单。强制杀进程、断电、磁盘完全不可写可能只留下 `in_progress`/缺失清单，不能当成功包；重试须使用新批次，不能覆盖旧批次。不删除源文件、其他批次或未知临时文件，后续清理由负责人另行授权。
+
+逐张64 KiB缓冲复制、不改JPEG字节、不压缩/加水印，SHA-256可校验。元数据规模 O(身份+记录)，查询超过200,000连接结果报错而非截断；正常统计不扫描目录，导出只读取数据库引用。空间预估包含清单预留，每张复制前再次检查空间；文件系统须支持普通文件/硬链接/空间查询。镜像没有.git时记录真实模块哈希及“提交/镜像标识不可核验”，不伪造提交；操作者应另行保存所用镜像ID的可信运行记录。
+
+下载至负责人私有电脑后，用系统自带压缩工具压缩整个已核验批次目录。不要创建公开照片链接，不把内部记录用途当作对外宣传授权，不上传真实照片到 Git、Actions artifact 或聊天附件，不新增自动删除任务。
+
+### 隔离验证工具
+
+`npm run check` 已包含报表/CSV/文件安全及故障注入单测。`npm run test:export:mysql` 要求显式 `TEST_DB_HOST`（回环）、`TEST_DB_PORT`、`TEST_DB_USER`、`TEST_DB_PASSWORD`、`TEST_DB_SERVER_UUID` 和本机 `TEST_BROWSER_EXECUTABLE`；只在核验UUID后创建随机 `changqi_export_test_*` 库，使用合成JPEG，测试结束仅删除自己创建的库。报告/截图在忽略的 tmp 目录，合成资料包在系统临时目录的独立私有批次父目录。不要将生产 DB_* 当作测试替代。A4已含A1–A3，不重复跑全部阶段；微信SDK/故障注入仍是模拟，不是真机通过。
+
 ## 资料入口
 
 本轮读取以下官方资料核对能力与命令；未因此认定本项目账号或服务器已配置成功。具体 action / runner / 依赖版本在 A0/A6 实现时选择并验证。

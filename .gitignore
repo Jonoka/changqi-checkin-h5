@@ -19,6 +19,17 @@ coverage/
 /uploads/
 /backups/
 /artifacts/
+/exports/
+/export-batches/
+**/export-info.json
+**/照片清单.csv
+**/游客进度.csv
+**/异常清单.csv
+**/统计汇总.csv
+**/地点统计.csv
+**/每日统计.csv
+**/活动导出-*/
+**/photos/CQ*/
 /tmp/
 *.sql.gz
 *.log

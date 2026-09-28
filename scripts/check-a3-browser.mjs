@@ -190,7 +190,7 @@ export async function checkA3Browser({ call, evaluate, click, waitFor, ready, bu
   await call('Page.navigate', { url: `${origin}/stats` })
   await waitFor('document.querySelector("[data-stats-count]")', 'authenticated statistics page')
   assert.equal(Number(await evaluate('document.querySelector("[data-stats-count]").textContent')), before + 2)
-  await click('刷新人数')
+  await click('手动刷新统计')
   await waitFor('document.querySelector("[data-stats-count]")', 'read-only statistics refresh')
   assert.equal(Number(await evaluate('document.querySelector("[data-stats-count]").textContent')), before + 2)
   await call('Network.setExtraHTTPHeaders', { headers: {} })

@@ -11,6 +11,7 @@ COPY config ./config
 # Includes additive db/migrations modules used by db:schema on existing databases.
 COPY db ./db
 COPY scripts/apply-schema.mjs ./scripts/apply-schema.mjs
+COPY scripts/export-activity.mjs ./scripts/export-activity.mjs
 RUN npm prune --omit=dev
 
 FROM node:24-bookworm-slim@sha256:5cbc7caba8c2c0f0bca675d1b61b9f2857e1cf1853c6164ee9dd409501a936e7 AS runtime
@@ -25,6 +26,7 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/config ./config
 COPY --from=build /app/db ./db
 COPY --from=build /app/scripts/apply-schema.mjs ./scripts/apply-schema.mjs
+COPY --from=build /app/scripts/export-activity.mjs ./scripts/export-activity.mjs
 COPY --from=build /app/web/dist ./web/dist
 RUN mkdir -p /var/lib/changqi/uploads
 EXPOSE 3000
